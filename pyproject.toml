@@ -1,0 +1,33 @@
+[build-system]
+requires = ["flit_core >= 3.12.0, <4"]
+build-backend = "flit_core.buildapi"
+
+
+[project]
+name = "tagtrack"
+dynamic = ["version"]
+authors = [
+  { name="Łukasz Flisak", email="lu.dev00@gmail.com" },
+]
+description = "REST API for editing audio file metadata"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    'Django>=5.2.1',
+    'django-ninja>=1.4.1',
+    'pillow>=11.2.1'
+]
+
+classifiers = [
+    "Programming Language :: Python :: 3.10",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+]
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+
+[project.urls]
+Homepage = "https://github.com/flisakl/tagtrack"
+Issues = "https://github.com/flisakl/tagtrack/issues"
+
