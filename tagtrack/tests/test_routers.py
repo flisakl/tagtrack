@@ -56,3 +56,28 @@ class TestArtistRouter(TestHelper):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(json['name'], 'Rammstein')
         self.assertEqual(len(json['albums']), 2)
+
+    async def test_artist_can_be_updated(self):
+        obj = await Artist.objects.acreate(name='Romsetin')
+        await Album.objects.abulk_create([
+            Album(name='Rosenrot', artist=obj),
+            Album(name='Reise, Reise', artist=obj),
+        ])
+        data = {'name': 'Rammstein'}
+
+        res = await self.client.patch(f"/{obj.pk}", data=data)
+        json = res.json()
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(json['name'], 'Rammstein')
+
+    async def test_artist_can_be_deleted(self):
+        f = self.temp_file(upload_filename='old.jpg')
+        obj = await Artist.objects.acreate(name='Romsetin', image=f)
+        self.assertTrue(self.file_exists('artists', 'old.jpg'))
+
+        res = await self.client.delete(f"/{obj.pk}")
+
+        self.assertEqual(res.status_code, 204)
+        self.assertFalse(self.file_exists('artists', 'old.jpg'))
+        self.assertEqual(await Artist.objects.acount(), 0)

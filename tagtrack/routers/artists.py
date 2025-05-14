@@ -80,3 +80,41 @@ async def get_artist(request, artist_id: int):
         album_count=Count('albums')
     ).prefetch_related('songs', 'albums')
     return await aget_object_or_404(qs, pk=artist_id)
+
+
+@router.patch(
+    '/{int:artist_id}',
+    response=ArtistSchemaOut,
+    auth=settings.TAGTRACK_AUTH['UPDATE']
+)
+async def update_artist(
+    request,
+    artist_id: int,
+    form: Form[ArtistSchemaIn],
+    image: UploadedFile | None = File(None)
+):
+    data = form.dict(exclude_unset=True)
+    obj, created = await Artist.objects.aget_or_create(**data)
+
+    # Set new image
+    if image and utils.validate_image(image):
+        await sync_to_async(obj.image.save)(image.name, image)
+
+    return obj
+
+
+@router.delete(
+    '/{int:artist_id}',
+    response={204: None},
+    auth=settings.TAGTRACK_AUTH['DELETE']
+)
+async def delete_artist(
+    request,
+    artist_id: int,
+):
+    obj = await aget_object_or_404(Artist, pk=artist_id)
+
+    obj.image.delete(save=False)
+    await obj.adelete()
+
+    return obj
