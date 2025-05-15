@@ -34,7 +34,7 @@ async def create_album(
         await Artist.objects.aget(pk=form.artist_id)
     except Artist.DoesNotExist:
         raise ValidationError([
-            utils.make_error(['form'], 'name', _('Artist does not exist'))
+            utils.make_error(['form'], 'artist_id', _('Artist does not exist'))
         ])
 
     if image:
@@ -54,7 +54,7 @@ async def create_album(
     except IntegrityError as e:
         if 'unique' in str(e).lower():
             err = utils.make_error(
-                ['form'], 'artist_id', _('Album already exists')
+                ['form'], 'name', _('Album already exists')
             )
             raise ValidationError([err])
 
@@ -89,3 +89,62 @@ async def get_album(request, album_id: int):
         total_duration=Sum('songs__duration') / 60
     ).select_related('artist').prefetch_related('songs')
     return await utils.get_or_set_from_cache(key, qs, album_id)
+
+
+@router.patch(
+    '/{int:album_id}',
+    response=AlbumSchemaOut,
+    auth=settings.TAGTRACK_AUTH['UPDATE']
+)
+async def update_album(
+    request,
+    album_id: int,
+    form: Form[AlbumSchemaIn],
+    image: UploadedFile | None = File(None)
+):
+    data = form.dict(exclude_unset=True)
+    try:
+        await Artist.objects.aget(pk=form.artist_id)
+    except Artist.DoesNotExist:
+        raise ValidationError([
+            utils.make_error(['form'], 'name', _('Artist does not exist'))
+        ])
+
+    obj = await aget_object_or_404(Album, pk=album_id)
+    if image and utils.validate_image(image):
+        await sync_to_async(obj.image.save)(image.name, image, save=False)
+
+    for attr, value in data.items():
+        setattr(obj, attr, value)
+
+    try:
+        await obj.asave()
+    except IntegrityError as e:
+        if 'unique' in str(e).lower():
+            err = utils.make_error(
+                ['form'], 'name', _('Album already exists')
+            )
+            raise ValidationError([err])
+    key = f"albums:album_id={obj.pk}"
+    await sync_to_async(cache.delete)(key, obj)
+    return obj
+
+
+@router.delete(
+    '/{int:album_id}',
+    response={204: None},
+    auth=settings.TAGTRACK_AUTH['DELETE']
+)
+async def delete_album(
+    request,
+    album_id: int,
+):
+    obj = await aget_object_or_404(Album, pk=album_id)
+    # Update cache
+    key = f"albums:album_id={obj.pk}"
+    await sync_to_async(cache.delete)(key)
+    obj.image.delete(save=False)
+    await obj.adelete()
+
+    return obj
+

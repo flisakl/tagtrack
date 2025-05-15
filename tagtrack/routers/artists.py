@@ -94,11 +94,21 @@ async def update_artist(
     image: UploadedFile | None = File(None)
 ):
     data = form.dict(exclude_unset=True)
-    obj, created = await Artist.objects.aget_or_create(**data)
+    obj = await aget_object_or_404(Artist, pk=artist_id)
+
+    for attr, value in data.items():
+        setattr(obj, attr, value)
 
     # Set new image
     if image and utils.validate_image(image):
-        await sync_to_async(obj.image.save)(image.name, image)
+        await sync_to_async(obj.image.save)(image.name, image, save=False)
+
+    try:
+        await obj.asave()
+    except IntegrityError:
+        raise ValidationError([
+            utils.make_error(['form'], 'name', _('Artist already exists'))
+        ])
 
     # Remove item from cache
     key = f"artists:artist_id={obj.pk}"

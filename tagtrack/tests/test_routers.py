@@ -82,6 +82,18 @@ class TestArtistRouter(TestHelper):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(json['name'], 'Rammstein')
 
+    async def test_artist_can_not_be_updated_with_existing_name(self):
+        data = {
+            'name': 'Johnny Cash'
+        }
+        files = {'image': self.temp_file()}
+        await Artist.objects.acreate(name=data['name'])
+        obj = await Artist.objects.acreate(name='Billy Joel')
+
+        response = await self.client.patch(f'/{obj.pk}', data=data, FILES=files)
+
+        self.assertEqual(response.status_code, 422)
+
     async def test_artist_can_be_deleted(self):
         f = self.temp_file(upload_filename='old.jpg')
         obj = await Artist.objects.acreate(name='Romsetin', image=f)
@@ -186,3 +198,47 @@ class TestAlbumRouter(TestHelper):
 
         self.assertEqual(res.status_code, 200)
         self.assertEqual(json['name'], 'Rosenrot')
+
+    async def test_album_can_be_updated(self):
+        art = await Artist.objects.acreate(name='Rammstein')
+        obj = await Album.objects.acreate(name='bad name', artist=art)
+        data = {'name': 'Good name', 'year': 1990, 'genre': 'Metal', 'artist_id': art.pk}
+
+        res = await self.client.patch(f"/{obj.pk}", data=data)
+        json = res.json()
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(json['name'], data['name'])
+        self.assertEqual(json['year'], data['year'])
+        self.assertEqual(json['genre'], data['genre'])
+
+    async def test_album_can_not_be_updated_with_non_existing_author(self):
+        art = await Artist.objects.acreate(name='Rammstein')
+        obj = await Album.objects.acreate(name='Good name', artist=art)
+        obj = await Album.objects.acreate(name='bad name', artist=art)
+        data = {'name': 'Good name', 'year': 1990, 'genre': 'Metal', 'artist_id': art.pk}
+
+        res = await self.client.patch(f"/{obj.pk}", data=data)
+
+        self.assertEqual(res.status_code, 422)
+
+    async def test_album_can_not_be_updated_with_non_existing_author(self):
+        art = await Artist.objects.acreate(name='Rammstein')
+        obj = await Album.objects.acreate(name='bad name', artist=art)
+        data = {'name': 'Good name', 'year': 1990, 'genre': 'Metal', 'artist_id': 10}
+
+        res = await self.client.patch(f"/{obj.pk}", data=data)
+
+        self.assertEqual(res.status_code, 422)
+
+    async def test_album_can_be_deleted(self):
+        f = self.temp_file(upload_filename='old.jpg')
+        art = await Artist.objects.acreate(name='Rammstein')
+        obj = await Album.objects.acreate(name='Romsetin', image=f, artist=art)
+        self.assertTrue(self.file_exists('albums', 'old.jpg'))
+
+        res = await self.client.delete(f"/{obj.pk}")
+
+        self.assertEqual(res.status_code, 204)
+        self.assertFalse(self.file_exists('albums', 'old.jpg'))
+        self.assertEqual(await Album.objects.acount(), 0)

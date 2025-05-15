@@ -22,6 +22,9 @@ class Album(models.Model):
     artist = models.ForeignKey(
         Artist, on_delete=models.CASCADE, related_name='albums')
 
+    def __str__(self):
+        return self.name
+
     class Meta:
         # This ensures we won't be able to create 2 albums with the same name
         # for the same artist
