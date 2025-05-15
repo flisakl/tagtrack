@@ -1,5 +1,8 @@
 from django.utils.translation import gettext_lazy as _
 from django.core.files.uploadedfile import TemporaryUploadedFile
+from django.shortcuts import aget_object_or_404
+from django.core.cache import cache
+from asgiref.sync import sync_to_async
 from PIL import Image
 
 
@@ -21,3 +24,15 @@ def validate_image(image: TemporaryUploadedFile) -> bool:
     except Exception:
         return False
     return True
+
+
+async def get_or_set_from_cache(key: str, qs, single_object: bool = False):
+    data = await sync_to_async(cache.get)(key, None)
+    if data is not None:
+        return data
+    if single_object:
+        data = await aget_object_or_404(qs)
+    else:
+        data = await sync_to_async(list)(qs)
+    await sync_to_async(cache.set)(key,  data)
+    return data

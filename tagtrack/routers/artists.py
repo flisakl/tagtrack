@@ -1,5 +1,6 @@
 from ninja import Router, Form, File, UploadedFile, Query
 from django.conf import settings
+from django.core.cache import cache
 from django.db.models import Count
 from django.db import IntegrityError
 from django.utils.translation import gettext_lazy as _
@@ -7,6 +8,7 @@ from django.shortcuts import aget_object_or_404
 from ninja.errors import ValidationError
 from ninja.pagination import paginate
 from asgiref.sync import sync_to_async
+from urllib.parse import urlencode
 
 from tagtrack import utils
 from tagtrack.models import Artist
@@ -49,6 +51,9 @@ async def create_artist(
         raise ValidationError(errors)
     else:
         await artist.asave()
+        # Update cache
+        key = f"artists:artist_id={artist.pk}"
+        await sync_to_async(cache.set)(key, artist)
         return 201, artist
 
 
@@ -62,11 +67,12 @@ async def get_artists(
     request,
     filters: Query[ArtistFilterSchema]
 ):
-    qs = Artist.objects.annotate(
+    key = f"artists:{urlencode(request.GET, doseq=True)}"
+    qs = filters.filter(Artist.objects.annotate(
         song_count=Count('songs'),
         album_count=Count('albums')
-    )
-    return await sync_to_async(list)(filters.filter(qs))
+    ))
+    return await utils.get_or_set_from_cache(key, qs)
 
 
 @router.get(
@@ -75,11 +81,12 @@ async def get_artists(
     auth=settings.TAGTRACK_AUTH['READ']
 )
 async def get_artist(request, artist_id: int):
+    key = f"artists:artist_id={artist_id}"
     qs = Artist.objects.annotate(
         song_count=Count('songs'),
         album_count=Count('albums')
     ).prefetch_related('songs', 'albums')
-    return await aget_object_or_404(qs, pk=artist_id)
+    return await utils.get_or_set_from_cache(key, qs, True)
 
 
 @router.patch(
@@ -100,6 +107,9 @@ async def update_artist(
     if image and utils.validate_image(image):
         await sync_to_async(obj.image.save)(image.name, image)
 
+    # Update cache
+    key = f"artists:artist_id={obj.pk}"
+    await sync_to_async(cache.set)(key, obj)
     return obj
 
 
@@ -113,7 +123,9 @@ async def delete_artist(
     artist_id: int,
 ):
     obj = await aget_object_or_404(Artist, pk=artist_id)
-
+    # Update cache
+    key = f"artists:artist_id={obj.pk}"
+    await sync_to_async(cache.delete)(key)
     obj.image.delete(save=False)
     await obj.adelete()
 

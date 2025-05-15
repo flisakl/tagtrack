@@ -6,6 +6,8 @@ from tagtrack.models import Artist, Song, Album
 __all__ = [
     'ArtistSchemaIn',
     'ArtistSchemaOut',
+    'ArtistFilterSchema',
+    'SingleArtistSchemaOut',
 ]
 
 
@@ -28,11 +30,12 @@ class AlbumSchemaOut(ModelSchema):
         fields = ['id', 'name', 'image', 'genre', 'year']
 
 
-class ArtistSchemaOut(ArtistSchemaIn):
+class ArtistSchemaOut(ModelSchema):
     song_count: int = 0
     album_count: int = 0
 
     class Meta:
+        model = Artist
         fields = ['id', 'name', 'image']
 
 
@@ -42,6 +45,10 @@ class ArtistFilterSchema(FilterSchema):
     album_count: int | None = Field(0, q='album_count__gte')
 
 
-class SingleArtistSchemaOut(ArtistSchemaOut):
+class SingleArtistSchemaOut(ModelSchema):
     songs: list[SongSchemaOut] = []
     albums: list[AlbumSchemaOut] = []
+
+    class Meta:
+        model = Artist
+        fields = ['id', 'name', 'image']
