@@ -92,3 +92,54 @@ class TestArtistRouter(TestHelper):
         self.assertEqual(res.status_code, 204)
         self.assertFalse(self.file_exists('artists', 'old.jpg'))
         self.assertEqual(await Artist.objects.acount(), 0)
+
+
+class TestAlbumRouter(TestHelper):
+    def setUp(self):
+        self.client = TestAsyncClient(albums_router)
+
+    async def test_album_can_be_created(self):
+        artist = await Artist.objects.acreate(name='Billy Joel')
+        data = {
+            'name': 'Cold Spring Harbor',
+            'genre': 'Rock',
+            'year': 1970,
+            'artist_id': artist.pk
+        }
+        files = {'image': self.temp_file()}
+
+        response = await self.client.post('', data=data, FILES=files)
+
+        self.assertEqual(response.status_code, 201)
+        obj = await Album.objects.afirst()
+        self.assertEqual(obj.name, data['name'])
+
+    async def test_album_can_not_be_created_with_non_existing_artist(self):
+        data = {
+            'name': 'Cold Spring Harbor',
+            'genre': 'Rock',
+            'year': 1970,
+            'artist_id': 1
+        }
+        files = {'image': self.temp_file()}
+
+        response = await self.client.post('', data=data, FILES=files)
+
+        self.assertEqual(response.status_code, 422)
+        count = await Album.objects.acount()
+        self.assertEqual(count, 0)
+
+    async def test_album_name_must_be_unique_per_artist(self):
+        artist = await Artist.objects.acreate(name='Billy Joel')
+        data = {
+            'name': 'Cold Spring Harbor',
+            'genre': 'Rock',
+            'year': 1970,
+            'artist_id': artist.pk
+        }
+        await Album.objects.acreate(name=data['name'], artist=artist)
+        files = {'image': self.temp_file()}
+
+        response = await self.client.post('', data=data, FILES=files)
+
+        self.assertEqual(response.status_code, 422)
