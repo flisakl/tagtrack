@@ -1,7 +1,7 @@
 from ninja import Router, Form, File, UploadedFile, Query
 from django.conf import settings
 from django.core.cache import cache
-from django.db.models import Count
+from django.db.models import Count, Sum
 from django.db import IntegrityError
 from django.utils.translation import gettext_lazy as _
 from django.shortcuts import aget_object_or_404
@@ -49,6 +49,7 @@ async def create_album(
             album.image = image
     try:
         await album.asave()
+        return 201, album
 
     except IntegrityError as e:
         if 'unique' in str(e).lower():
@@ -56,7 +57,35 @@ async def create_album(
                 ['form'], 'artist_id', _('Album already exists')
             )
             raise ValidationError([err])
-    # Update cache
-    key = f"albums:album_id={album.pk}"
-    await sync_to_async(cache.set)(key, album)
-    return 201, album
+
+
+@router.get(
+    '',
+    response=list[AlbumSchemaOut],
+    auth=settings.TAGTRACK_AUTH['READ']
+)
+@paginate
+async def get_albums(
+    request,
+    filters: Query[AlbumFilterSchema]
+):
+    key = f"albums:{urlencode(request.GET, doseq=True)}"
+    qs = filters.filter(Album.objects.annotate(
+        song_count=Count('songs'),
+        total_duration=Sum('songs__duration') / 60
+    ))
+    return await utils.get_or_set_from_cache(key, qs)
+
+
+@router.get(
+    '/{int:album_id}',
+    response=SingleAlbumSchemaOut,
+    auth=settings.TAGTRACK_AUTH['READ']
+)
+async def get_album(request, album_id: int):
+    key = f"albums:album_id={album_id}"
+    qs = Album.objects.annotate(
+        song_count=Count('songs'),
+        total_duration=Sum('songs__duration') / 60
+    ).select_related('artist').prefetch_related('songs')
+    return await utils.get_or_set_from_cache(key, qs, album_id)

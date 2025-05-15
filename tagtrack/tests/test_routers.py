@@ -143,3 +143,46 @@ class TestAlbumRouter(TestHelper):
         response = await self.client.post('', data=data, FILES=files)
 
         self.assertEqual(response.status_code, 422)
+
+    async def test_albums_can_be_filtered(self):
+        adata = [
+            {'name': 'Artist One'},
+            {'name': 'Artist Two'},
+            {'name': 'Funky man'},
+            {'name': 'Bigman'},
+        ]
+        art = await Artist.objects.abulk_create([Artist(**d) for d in adata])
+
+        await Album.objects.abulk_create([
+            Album(year=1970, genre='Rock', name='Rock above all', artist=art[0]),
+            Album(year=1980, genre='Rock', name='Rock ballads', artist=art[0]),
+            Album(year=1990, genre='Metal', name='Heavy riffs', artist=art[1]),
+            Album(year=2010, genre='Metal', name='Uncomprehensible leads', artist=art[2]),
+            Album(year=2020, genre='Hip-Hop', name='Gangsta Life', artist=art[3]),
+        ])
+
+        r1 = await self.client.get('', query_params={'name': 'rock'})
+        r2 = await self.client.get('', query_params={'artist_id': art[0].pk, 'name': 'rock'})
+        r3 = await self.client.get('', query_params={'year_min': 2015})
+        r4 = await self.client.get('', query_params={'genre': 'metal'})
+        r5 = await self.client.get('', query_params={'artist_name': 'funky'})
+
+        self.assertTrue(all([r.status_code == 200 for r in [r1, r2, r3, r4]]))
+        self.assertEqual(len(r1.json()['items']), 2)
+        self.assertEqual(r2.json()['items'][0]['name'], 'Rock above all')
+        self.assertEqual(r3.json()['items'][0]['name'], 'Gangsta Life')
+        self.assertEqual(len(r4.json()['items']), 2)
+        self.assertEqual(len(r5.json()['items']), 1)
+
+    async def test_album_can_be_fetched(self):
+        obj = await Artist.objects.acreate(name='Rammstein')
+        albums = await Album.objects.abulk_create([
+            Album(name='Rosenrot', artist=obj),
+            Album(name='Reise, Reise', artist=obj),
+        ])
+
+        res = await self.client.get(f"/{albums[0].pk}")
+        json = res.json()
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(json['name'], 'Rosenrot')

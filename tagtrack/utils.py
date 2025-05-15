@@ -26,12 +26,12 @@ def validate_image(image: TemporaryUploadedFile) -> bool:
     return True
 
 
-async def get_or_set_from_cache(key: str, qs, single_object: bool = False):
+async def get_or_set_from_cache(key: str, qs, obj_pk: int = None):
     data = await sync_to_async(cache.get)(key, None)
     if data is not None:
         return data
-    if single_object:
-        data = await aget_object_or_404(qs)
+    if obj_pk:
+        data = await aget_object_or_404(qs, pk=obj_pk)
     else:
         data = await sync_to_async(list)(qs)
     await sync_to_async(cache.set)(key,  data)
