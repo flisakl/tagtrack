@@ -43,9 +43,6 @@ async def create_artist(
 
     try:
         await artist.asave()
-        # Update cache
-        key = f"artists:artist_id={artist.pk}"
-        await sync_to_async(cache.set)(key, artist)
         return 201, artist
     except IntegrityError:
         raise ValidationError([
@@ -82,7 +79,7 @@ async def get_artist(request, artist_id: int):
         song_count=Count('songs'),
         album_count=Count('albums')
     ).prefetch_related('songs', 'albums')
-    return await utils.get_or_set_from_cache(key, qs, True)
+    return await utils.get_or_set_from_cache(key, qs, artist_id)
 
 
 @router.patch(
@@ -103,9 +100,9 @@ async def update_artist(
     if image and utils.validate_image(image):
         await sync_to_async(obj.image.save)(image.name, image)
 
-    # Update cache
+    # Remove item from cache
     key = f"artists:artist_id={obj.pk}"
-    await sync_to_async(cache.set)(key, obj)
+    await sync_to_async(cache.delete)(key)
     return obj
 
 
@@ -119,7 +116,7 @@ async def delete_artist(
     artist_id: int,
 ):
     obj = await aget_object_or_404(Artist, pk=artist_id)
-    # Update cache
+    # Remove item from cache
     key = f"artists:artist_id={obj.pk}"
     await sync_to_async(cache.delete)(key)
     obj.image.delete(save=False)

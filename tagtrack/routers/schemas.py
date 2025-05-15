@@ -33,14 +33,17 @@ class SongSchemaOut(ModelSchema):
 
 
 class AlbumSchemaOut(ModelSchema):
+    song_count: int | None = None
+    total_duration: int | None = None
+
     class Meta:
         model = Album
         fields = ['id', 'name', 'image', 'genre', 'year']
 
 
 class ArtistSchemaOut(ModelSchema):
-    song_count: int = 0
-    album_count: int = 0
+    song_count: int | None = None
+    album_count: int | None = None
 
     class Meta:
         model = Artist
@@ -55,6 +58,8 @@ class ArtistFilterSchema(FilterSchema):
 
 class AlbumFilterSchema(FilterSchema):
     name: str | None = Field(None, q='name__icontains')
+    songs_min: int | None = Field(None, q='song_count__gte')
+    songs_max: int | None = Field(None, q='song_count__lte')
     year_min: int | None = Field(None, q='year__gte')
     year_max: int | None = Field(None, q='year__lte')
     genre: str | None = Field(None, q='genre__icontains')
@@ -78,7 +83,9 @@ class SingleArtistSchemaOut(ModelSchema):
 class SingleAlbumSchemaOut(ModelSchema):
     artist: ArtistSchemaOut
     songs: list[SongSchemaOut] = []
+    total_duration: int | None = None
+    song_count: int | None = None
 
     class Meta:
         model = Album
-        fields = ['id', 'name', 'image']
+        fields = ['id', 'name', 'image', 'genre', 'year']
