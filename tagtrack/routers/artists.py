@@ -78,8 +78,16 @@ async def get_artist(request, artist_id: int):
     qs = Artist.objects.annotate(
         song_count=Count('songs'),
         album_count=Count('albums')
-    ).prefetch_related('songs', 'albums')
-    return await utils.get_or_set_from_cache(key, qs, artist_id)
+    ).prefetch_related('songs__album', 'albums')
+    obj = await utils.get_or_set_from_cache(key, qs, artist_id)
+
+    for song in obj.songs.all():
+        sa = song.album
+        if sa:
+            song.image = sa.image
+            song.genre = song.genre if song.genre else sa.genre
+            song.year = song.year if song.year else sa.year
+    return obj
 
 
 @router.patch(

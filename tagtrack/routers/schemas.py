@@ -29,7 +29,7 @@ class SongSchemaOut(ModelSchema):
     class Meta:
         model = Song
         fields = ['id', 'name', 'duration', 'genre', 'year', 'image', 'file',
-                  ]
+                  'number']
 
 
 class AlbumSchemaOut(ModelSchema):
