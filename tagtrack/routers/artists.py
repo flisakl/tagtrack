@@ -29,32 +29,28 @@ async def create_artist(
     form: Form[ArtistSchemaIn],
     image: UploadedFile | None = File(None)
 ):
-    errors = []
+    artist = Artist(**form.dict(exclude_unset=True))
+
+    # Validate the image if provided
+    if image:
+        if utils.validate_image(image):
+            artist.image = image
+        else:
+            err = utils.make_error(
+                ['form'], 'image', _('File is not an image')
+            )
+            raise ValidationError([err])
+
     try:
-        artist = Artist(**form.dict(exclude_unset=True))
-        # Validate the image if provided
-        if image:
-            if utils.validate_image(image):
-                artist.image = image
-            else:
-                err = utils.make_error(
-                    ['form'], 'image', _('File is not an image')
-                )
-                errors.append(err)
-
-    except IntegrityError:
-        errors.append(
-            utils.make_errors(['form'], 'name', _('Artist already exists'))
-        )
-
-    if errors:
-        raise ValidationError(errors)
-    else:
         await artist.asave()
         # Update cache
         key = f"artists:artist_id={artist.pk}"
         await sync_to_async(cache.set)(key, artist)
         return 201, artist
+    except IntegrityError:
+        raise ValidationError([
+            utils.make_error(['form'], 'name', _('Artist already exists'))
+        ])
 
 
 @router.get(

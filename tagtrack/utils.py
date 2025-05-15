@@ -6,7 +6,7 @@ from asgiref.sync import sync_to_async
 from PIL import Image
 
 
-def make_errors(loc: list[str], field_name: str, msg: str):
+def make_error(loc: list[str], field_name: str, msg: str):
     loc.append(field_name)
     return {
         "loc": loc,

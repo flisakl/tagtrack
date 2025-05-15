@@ -1,6 +1,6 @@
 from ninja.testing import TestAsyncClient
 
-from tagtrack.routers import artists_router
+from tagtrack.routers import artists_router, albums_router
 from tagtrack.models import Artist, Album
 from .helper import TestHelper
 
@@ -20,6 +20,17 @@ class TestArtistRouter(TestHelper):
         self.assertEqual(response.status_code, 201)
         obj = await Artist.objects.afirst()
         self.assertEqual(obj.name, data['name'])
+
+    async def test_artist_can_not_create_2_artists_with_the_same_name(self):
+        data = {
+            'name': 'Johnny Cash'
+        }
+        files = {'image': self.temp_file()}
+        await Artist.objects.acreate(name=data['name'])
+
+        response = await self.client.post('', data=data, FILES=files)
+
+        self.assertEqual(response.status_code, 422)
 
     async def test_artists_can_be_filtered(self):
         data = [
