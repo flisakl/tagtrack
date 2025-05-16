@@ -52,7 +52,9 @@ class TestHelper(TestCase):
         image: TemporaryUploadedFile = None,
         songs: list[Song] = []
     ):
-        obj = await Album.objects.acreate(name=name, image=image)
+        obj = await Album.objects.acreate(
+            name=name, image=image, artist=artist
+        )
         if songs:
             await obj.songs.aset(songs)
         return obj
@@ -76,16 +78,29 @@ class TestHelper(TestCase):
     async def create_albums(self):
         a = await self.create_artists()
         data = [
-            {'genre': 'Piano Rock', 'year': 1970, 'artist': a[0], 'name': 'Cold Spring Harbor'},
-            {'genre': 'Soft Rock', 'year': 1973, 'artist': a[0], 'name': 'Piano Man'},
+            {'genre': 'Piano Rock', 'year': 1970,
+                'artist': a[0], 'name': 'Cold Spring Harbor'},
+            {'genre': 'Soft Rock', 'year': 1973,
+                'artist': a[0], 'name': 'Piano Man'},
             {'genre': 'J-pop', 'year': 2019, 'artist': a[1], 'name': 'Sansan'},
-            {'genre': 'Alt Rock', 'year': 1996, 'artist': a[2], 'name': 'No Code'},
-            {'genre': 'Alt Rock', 'year': 1998, 'artist': a[2], 'name': 'Yield'},
-            {'genre': 'Pop rock', 'year': 2022, 'artist': a[3], 'name': 'Impera'},
-            {'genre': 'Pop rock', 'year': 2015, 'artist': a[3], 'name': 'Meliora'},
-            {'genre': 'Pop rock', 'year': 2010, 'artist': a[3], 'name': 'Opus Eponymous'},
-            {'genre': 'Metal', 'year': 1986, 'artist': a[4], 'name': 'Master of Puppets'},
-            {'genre': 'Metal', 'year': 2003, 'artist': a[4], 'name': 'St. Anger'},
+            {'genre': 'Alt Rock', 'year': 1996,
+                'artist': a[2], 'name': 'No Code'},
+            {'genre': 'Alt Rock', 'year': 1998,
+                'artist': a[2], 'name': 'Yield'},
+            {'genre': 'Pop rock', 'year': 2022,
+                'artist': a[3], 'name': 'Impera'},
+            {'genre': 'Pop rock', 'year': 2015,
+                'artist': a[3], 'name': 'Meliora'},
+            {'genre': 'Pop rock', 'year': 2010,
+                'artist': a[3], 'name': 'Opus Eponymous'},
+            {'genre': 'Metal', 'year': 1986,
+                'artist': a[4], 'name': 'Master of Puppets'},
+            {'genre': 'Metal', 'year': 2003,
+                'artist': a[4], 'name': 'St. Anger'},
         ]
         objs = [Album(**d) for d in data]
         return await Album.objects.abulk_create(objs)
+
+    def assertJSONMatchesDict(self, json: dict, data: dict):
+        for key, value in data.items():
+            self.assertEqual(json[key], value)

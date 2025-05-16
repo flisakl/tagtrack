@@ -105,7 +105,7 @@ async def update_album(
         await Artist.objects.aget(pk=form.artist_id)
     except Artist.DoesNotExist:
         raise ValidationError([
-            utils.make_error(['form'], 'name', _('Artist does not exist'))
+            utils.make_error(['form'], 'artist_id', _('Artist does not exist'))
         ])
 
     obj = await aget_object_or_404(Album, pk=album_id)
@@ -124,7 +124,7 @@ async def update_album(
             )
             raise ValidationError([err])
     key = f"albums:album_id={obj.pk}"
-    await sync_to_async(cache.delete)(key, obj)
+    await sync_to_async(cache.delete)(key)
     return obj
 
 
@@ -145,4 +145,3 @@ async def delete_album(
     await obj.adelete()
 
     return obj
-
