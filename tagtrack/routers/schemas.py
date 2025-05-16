@@ -25,6 +25,15 @@ class AlbumSchemaIn(ModelSchema):
         fields = ['name', 'genre', 'year']
 
 
+class SongSchemaIn(ModelSchema):
+    album_id: int | None = None
+    artist_ids: str | None = ''
+
+    class Meta:
+        model = Song
+        fields = ['name', 'duration', 'genre', 'year', 'number']
+
+
 class SongSchemaOut(ModelSchema):
     class Meta:
         model = Song
@@ -89,3 +98,13 @@ class SingleAlbumSchemaOut(ModelSchema):
     class Meta:
         model = Album
         fields = ['id', 'name', 'image', 'genre', 'year']
+
+
+class SingleSongSchemaOut(ModelSchema):
+    artists: list[ArtistSchemaOut] = []
+    album: AlbumSchemaOut | None = None
+
+    class Meta:
+        model = Song
+        fields = ['name', 'duration', 'genre', 'year', 'image', 'file',
+                  'number']

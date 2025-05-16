@@ -1,7 +1,7 @@
 from ninja.testing import TestAsyncClient
 
-from tagtrack.routers import artists_router, albums_router
-from tagtrack.models import Artist, Album
+from tagtrack.routers import artists_router, albums_router, songs_router
+from tagtrack.models import Artist, Album, Song
 from .helper import TestHelper
 
 
@@ -166,11 +166,14 @@ class TestAlbumRouter(TestHelper):
         art = await Artist.objects.abulk_create([Artist(**d) for d in adata])
 
         await Album.objects.abulk_create([
-            Album(year=1970, genre='Rock', name='Rock above all', artist=art[0]),
+            Album(year=1970, genre='Rock',
+                  name='Rock above all', artist=art[0]),
             Album(year=1980, genre='Rock', name='Rock ballads', artist=art[0]),
             Album(year=1990, genre='Metal', name='Heavy riffs', artist=art[1]),
-            Album(year=2010, genre='Metal', name='Uncomprehensible leads', artist=art[2]),
-            Album(year=2020, genre='Hip-Hop', name='Gangsta Life', artist=art[3]),
+            Album(year=2010, genre='Metal',
+                  name='Uncomprehensible leads', artist=art[2]),
+            Album(year=2020, genre='Hip-Hop',
+                  name='Gangsta Life', artist=art[3]),
         ])
 
         r1 = await self.client.get('', query_params={'name': 'rock'})
@@ -202,7 +205,8 @@ class TestAlbumRouter(TestHelper):
     async def test_album_can_be_updated(self):
         art = await Artist.objects.acreate(name='Rammstein')
         obj = await Album.objects.acreate(name='bad name', artist=art)
-        data = {'name': 'Good name', 'year': 1990, 'genre': 'Metal', 'artist_id': art.pk}
+        data = {'name': 'Good name', 'year': 1990,
+                'genre': 'Metal', 'artist_id': art.pk}
 
         res = await self.client.patch(f"/{obj.pk}", data=data)
         json = res.json()
@@ -216,7 +220,8 @@ class TestAlbumRouter(TestHelper):
         art = await Artist.objects.acreate(name='Rammstein')
         obj = await Album.objects.acreate(name='Good name', artist=art)
         obj = await Album.objects.acreate(name='bad name', artist=art)
-        data = {'name': 'Good name', 'year': 1990, 'genre': 'Metal', 'artist_id': art.pk}
+        data = {'name': 'Good name', 'year': 1990,
+                'genre': 'Metal', 'artist_id': art.pk}
 
         res = await self.client.patch(f"/{obj.pk}", data=data)
 
@@ -225,7 +230,8 @@ class TestAlbumRouter(TestHelper):
     async def test_album_can_not_be_updated_with_non_existing_author(self):
         art = await Artist.objects.acreate(name='Rammstein')
         obj = await Album.objects.acreate(name='bad name', artist=art)
-        data = {'name': 'Good name', 'year': 1990, 'genre': 'Metal', 'artist_id': 10}
+        data = {'name': 'Good name', 'year': 1990,
+                'genre': 'Metal', 'artist_id': 10}
 
         res = await self.client.patch(f"/{obj.pk}", data=data)
 
@@ -242,3 +248,33 @@ class TestAlbumRouter(TestHelper):
         self.assertEqual(res.status_code, 204)
         self.assertFalse(self.file_exists('albums', 'old.jpg'))
         self.assertEqual(await Album.objects.acount(), 0)
+
+
+class TestSongRouter(TestHelper):
+    def setUp(self):
+        self.client = TestAsyncClient(songs_router)
+
+    async def test_song_can_be_added(self):
+        artist = await Artist.objects.acreate(name='Squire Tuck')
+        album = await Album.objects.acreate(
+            name='Squire Tuck Soundtracks for the Soul',
+            artist=artist
+        )
+        data = {
+            'name': 'Yearning For Better Days',
+            'duration': 166, 'genre': 'Instrumental', 'year': 2018,
+            'number': 6, 'album_id': album.pk, 'artist_ids': f'{artist.pk}'
+        }
+        files = {
+            'image': self.temp_file(),
+            'file': self.temp_file('song.mp3', mime='audio/mpeg')
+        }
+
+        response = await self.client.post('', data=data, FILES=files)
+        json = response.json()
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(1, await Song.objects.acount())
+        self.assertEqual(json['name'], data['name'])
+        self.assertEqual(json['album']['name'], album.name)
+        self.assertEqual(json['artists'][0]['name'], artist.name)

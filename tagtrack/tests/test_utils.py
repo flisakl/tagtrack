@@ -9,3 +9,10 @@ class TestUtils(TestHelper):
 
         self.assertFalse(utils.validate_image(f1))
         self.assertTrue(utils.validate_image(f2))
+
+    def test_audio_file_validation(self):
+        f1 = self.temp_file('song.mp3', 'audio/mpeg')
+        f2 = self.temp_file('junk.mp3', 'audio/mpeg')
+
+        self.assertFalse(utils.validate_audio_file(f1))
+        self.assertTrue(utils.validate_audio_file(f2))

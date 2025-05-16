@@ -5,14 +5,36 @@ from django.core.cache import cache
 from ninja.errors import ValidationError
 from asgiref.sync import sync_to_async
 from PIL import Image
+from mutagen import File
 
 
 def make_error(loc: list[str], field_name: str, msg: str):
-    loc.append(field_name)
+    l = loc.copy()
+    l.append(field_name)
     return {
-        "loc": loc,
+        "loc": l,
         "msg": _(msg)
     }
+
+
+def validate_audio_file(
+    audio: TemporaryUploadedFile,
+    loc: list[str] = ['form'],
+    field: str = 'file'
+
+) -> None | ValidationError:
+    """Returns ValidationError when audio file is invalid"""
+    err = make_error(loc, field, _('File is not an audio file'))
+    ve = ValidationError([err])
+    if "audio" not in audio.content_type:
+        return ve
+
+    try:
+        if not File(audio.file):
+            return ve
+    except Exception:
+        return ve
+    return None
 
 
 def validate_image(
@@ -22,9 +44,8 @@ def validate_image(
 
 ) -> None | ValidationError:
     """Returns ValidationError when image is invalid"""
-    ve = ValidationError([
-        make_error(loc, field, _('File is not an image'))
-    ])
+    err = make_error(loc, field, _('File is not an image'))
+    ve = ValidationError([err])
     if "image" not in image.content_type:
         return ve
 
