@@ -7,6 +7,8 @@ from asgiref.sync import sync_to_async
 from PIL import Image
 from mutagen import File
 
+from tagtrack.models import Album, Song
+
 
 def make_error(loc: list[str], field_name: str, msg: str):
     l = loc.copy()
@@ -66,3 +68,9 @@ async def get_or_set_from_cache(key: str, qs, obj_pk: int = None):
         data = await sync_to_async(list)(qs)
     await sync_to_async(cache.set)(key,  data)
     return data
+
+
+def fill_song_fields(song: Song, album: Album):
+    song.image = album.image
+    song.genre = song.genre if song.genre else album.genre
+    song.year = song.year if song.year else album.year

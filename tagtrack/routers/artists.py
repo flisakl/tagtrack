@@ -77,11 +77,8 @@ async def get_artist(request, artist_id: int):
     obj = await utils.get_or_set_from_cache(key, qs, artist_id)
 
     for song in obj.songs.all():
-        sa = song.album
-        if sa:
-            song.image = sa.image
-            song.genre = song.genre if song.genre else sa.genre
-            song.year = song.year if song.year else sa.year
+        if song.album:
+            utils.fill_song_fields(song, song.album)
     return obj
 
 
