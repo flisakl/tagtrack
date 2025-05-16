@@ -31,15 +31,10 @@ async def create_artist(
 ):
     artist = Artist(**form.dict(exclude_unset=True))
 
-    # Validate the image if provided
     if image:
-        if utils.validate_image(image):
-            artist.image = image
-        else:
-            err = utils.make_error(
-                ['form'], 'image', _('File is not an image')
-            )
-            raise ValidationError([err])
+        if err := utils.validate_image(image):
+            raise err
+        artist.image = image
 
     try:
         await artist.asave()
@@ -108,7 +103,7 @@ async def update_artist(
         setattr(obj, attr, value)
 
     # Set new image
-    if image and utils.validate_image(image):
+    if image and not utils.validate_image(image):
         await sync_to_async(obj.image.save)(image.name, image, save=False)
 
     try:

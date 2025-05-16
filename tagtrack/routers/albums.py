@@ -38,15 +38,9 @@ async def create_album(
         ])
 
     if image:
-        if not utils.validate_image(image):
-            err = utils.make_error(
-                ['form'], 'image', _('File is not an image')
-            )
-            raise ValidationError(
-                [err]
-            )
-        else:
-            album.image = image
+        if err := utils.validate_image(image):
+            raise err
+        album.image = image
     try:
         await album.asave()
         return 201, album
@@ -117,7 +111,7 @@ async def update_album(
         ])
 
     obj = await aget_object_or_404(Album, pk=album_id)
-    if image and utils.validate_image(image):
+    if image and not utils.validate_image(image):
         await sync_to_async(obj.image.save)(image.name, image, save=False)
 
     for attr, value in data.items():

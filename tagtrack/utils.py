@@ -2,6 +2,7 @@ from django.utils.translation import gettext_lazy as _
 from django.core.files.uploadedfile import TemporaryUploadedFile
 from django.shortcuts import aget_object_or_404
 from django.core.cache import cache
+from ninja.errors import ValidationError
 from asgiref.sync import sync_to_async
 from PIL import Image
 
@@ -14,16 +15,24 @@ def make_error(loc: list[str], field_name: str, msg: str):
     }
 
 
-def validate_image(image: TemporaryUploadedFile) -> bool:
-    """Checks if uploaded image is actual image file."""
+def validate_image(
+    image: TemporaryUploadedFile,
+    loc: list[str] = ['form'],
+    field: str = 'image'
+
+) -> None | ValidationError:
+    """Returns ValidationError when image is invalid"""
+    ve = ValidationError([
+        make_error(loc, field, _('File is not an image'))
+    ])
     if "image" not in image.content_type:
-        return False
+        return ve
 
     try:
         Image.open(image.temporary_file_path()).verify()
     except Exception:
-        return False
-    return True
+        return ve
+    return None
 
 
 async def get_or_set_from_cache(key: str, qs, obj_pk: int = None):
