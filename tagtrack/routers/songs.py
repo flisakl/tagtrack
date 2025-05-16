@@ -13,7 +13,7 @@ from urllib.parse import urlencode
 from tagtrack import utils
 from tagtrack.models import Album, Artist, Song
 from .schemas import (
-    SongSchemaIn, SongSchemaOut, SingleSongSchemaOut
+    SongSchemaIn, SongSchemaOut, SingleSongSchemaOut, SongFilterSchema
 )
 
 router = Router(tags=["Songs"])
@@ -62,3 +62,29 @@ async def create_song(
     obj = await Song.objects.prefetch_related('artists').select_related(
         'album').aget(pk=song.pk)
     return 201, obj
+
+
+@router.get(
+    '',
+    response=list[SongSchemaOut],
+    auth=settings.TAGTRACK_AUTH['READ']
+)
+@paginate
+async def get_albums(
+    request,
+    filters: Query[SongFilterSchema]
+):
+    key = f"songs:{urlencode(request.GET, doseq=True)}"
+    qs = filters.filter(Song.objects.select_related('album'))
+    return await utils.get_or_set_from_cache(key, qs)
+
+
+@router.get(
+    '/{int:song_id}',
+    response=SingleSongSchemaOut,
+    auth=settings.TAGTRACK_AUTH['READ']
+)
+async def get_song(request, song_id: int):
+    key = f"songs:song_id={song_id}"
+    qs = Song.objects.select_related('album').prefetch_related('artists')
+    return await utils.get_or_set_from_cache(key, qs, song_id)

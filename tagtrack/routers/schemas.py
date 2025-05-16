@@ -34,13 +34,6 @@ class SongSchemaIn(ModelSchema):
         fields = ['name', 'duration', 'genre', 'year', 'number']
 
 
-class SongSchemaOut(ModelSchema):
-    class Meta:
-        model = Song
-        fields = ['id', 'name', 'duration', 'genre', 'year', 'image', 'file',
-                  'number']
-
-
 class AlbumSchemaOut(ModelSchema):
     song_count: int | None = None
     total_duration: int | None = None
@@ -48,6 +41,15 @@ class AlbumSchemaOut(ModelSchema):
     class Meta:
         model = Album
         fields = ['id', 'name', 'image', 'genre', 'year']
+
+
+class SongSchemaOut(ModelSchema):
+    album: AlbumSchemaOut | None = None
+
+    class Meta:
+        model = Song
+        fields = ['id', 'name', 'duration', 'genre', 'year', 'image', 'file',
+                  'number']
 
 
 class ArtistSchemaOut(ModelSchema):
@@ -78,6 +80,19 @@ class AlbumFilterSchema(FilterSchema):
                                      description='in minutes')
     artist_id: int | None = Field(None, q='artist__pk')
     artist_name: str | None = Field(None, q='artist__name__icontains')
+
+
+class SongFilterSchema(FilterSchema):
+    name: str | None = Field(None, q='name__icontains')
+    year_min: int | None = Field(None, q='year__gte')
+    year_max: int | None = Field(None, q='year__lte')
+    genre: str | None = Field(None, q='genre__icontains')
+    duration_min: int | None = Field(None, q='duration__gte',
+                                     description='in seconds')
+    duration_max: int | None = Field(None, q='duration__lte',
+                                     description='in seconds')
+    album_id: int | None = Field(None, q='album__pk')
+    album_name: str | None = Field(None, q='album__name__icontains')
 
 
 class SingleArtistSchemaOut(ModelSchema):

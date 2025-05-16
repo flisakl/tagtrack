@@ -278,3 +278,57 @@ class TestSongRouter(TestHelper):
         self.assertEqual(json['name'], data['name'])
         self.assertEqual(json['album']['name'], album.name)
         self.assertEqual(json['artists'][0]['name'], artist.name)
+
+    async def test_songs_can_be_filtered(self):
+        artist = await Artist.objects.acreate(name='billy joel')
+        adata = [
+            {'name': 'Cold Spring Harbor', 'artist_id': artist.pk},
+            {'name': 'Piano Man', 'artist_id': artist.pk},
+            {'name': 'Atilla', 'artist_id': artist.pk},
+        ]
+        albums = await Album.objects.abulk_create([Album(**d) for d in adata])
+        sdata = [
+            {'file': self.temp_file('song.mp3', 'audio/mpeg'), 'year': 1970, 'genre': 'Rock', 'duration': 350,
+                'name': 'Why Judy Why', 'album_id': albums[0].pk},
+            {'file': self.temp_file('song.mp3', 'audio/mpeg'), 'year': 1976, 'genre': 'Rock', 'duration': 120,
+                'name': 'Tomorrow is Today', 'album_id': albums[0].pk},
+            {'file': self.temp_file('song.mp3', 'audio/mpeg'), 'year': 1980, 'genre': 'Pop', 'duration': 100,
+                'name': 'Piano Man', 'album_id': albums[1].pk},
+            {'file': self.temp_file('song.mp3', 'audio/mpeg'), 'year': 2015, 'genre': 'Metal',
+                'duration': 250, 'name': 'Sonne'},
+            {'file': self.temp_file('song.mp3', 'audio/mpeg'), 'year': 2010, 'genre': 'Rock',
+                'duration': 30, 'name': 'If you have ghosts'},
+        ]
+        await Song.objects.abulk_create([Song(**d) for d in sdata])
+        rdata = [
+            {'genre': 'roc'},
+            {'name': 'tomorrow'},
+            {'year_min': 1975, 'year_max': 1980},
+            {'duration_max': 50},
+            {'album_id': albums[0].pk},
+            {'album_name': albums[1].name},
+        ]
+
+        r = [await self.client.get('', query_params=rd) for rd in rdata]
+        j = [x.json() for x in r]
+
+        self.assertTrue(all([x.status_code == 200 for x in r]))
+        self.assertEqual(j[0]['count'], 3)
+        self.assertEqual(j[1]['count'], 1)
+        self.assertEqual(j[2]['count'], 2)
+        self.assertEqual(j[3]['count'], 1)
+        self.assertEqual(j[4]['count'], 2)
+        self.assertEqual(j[5]['count'], 1)
+
+    async def test_song_can_be_fetched(self):
+        f = self.temp_file('song.mp3', 'audio/mpeg')
+        art = await Artist.objects.acreate(name='Rammstein')
+        alb = await Album.objects.acreate(name='Rosenrot', artist=art)
+        obj = await Song.objects.acreate(duration=100, file=f, name='Test Song', album=alb)
+
+        res = await self.client.get(f"/{obj.pk}")
+        json = res.json()
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(json['name'], 'Test Song')
+        self.assertEqual(json['album']['name'], 'Rosenrot')
