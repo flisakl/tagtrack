@@ -332,3 +332,76 @@ class TestSongRouter(TestHelper):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(json['name'], 'Test Song')
         self.assertEqual(json['album']['name'], 'Rosenrot')
+
+    async def test_song_can_be_updated(self):
+        artist = await Artist.objects.acreate(name='Squire Tuck')
+        album2 = await Album.objects.acreate(
+            name='Test Album',
+            artist=artist
+        )
+        album = await Album.objects.acreate(
+            name='Squire Tuck Soundtracks for the Soul',
+            artist=artist
+        )
+
+        song = await Song.objects.acreate(
+            file=self.temp_file('song.mp3', upload_filename='old.mp3'),
+            album_id=album.pk, name='Test Song', duration=160,
+        )
+
+        data = {
+            'name': 'Yearning For Better Days',
+            'duration': 166, 'genre': 'Instrumental', 'year': 2018,
+            'number': 6, 'album_id': album2.pk, 'artist_ids': f'{artist.pk}'
+        }
+
+        files = {
+            'image': self.temp_file(),
+            'file': self.temp_file('song.mp3', mime='audio/mpeg'),
+        }
+
+        response = await self.client.patch(f'/{song.pk}', data=data, FILES=files)
+        json = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(1, await Song.objects.acount())
+        self.assertEqual(json['name'], data['name'])
+        self.assertEqual(json['album']['name'], album2.name)
+        self.assertEqual(json['artists'][0]['name'], artist.name)
+
+    async def test_song_can_not_be_updated_with_non_existing_album(self):
+        artist = await Artist.objects.acreate(name='Squire Tuck')
+        album = await Album.objects.acreate(
+            name='Squire Tuck Soundtracks for the Soul',
+            artist=artist
+        )
+        obj = await Song.objects.acreate(
+            file=self.temp_file('song.mp3', upload_filename='old.mp3'),
+            album_id=album.pk, name='Test Song', duration=160,
+        )
+        files = {'image': self.temp_file()}
+        data = {'name': 'New name', 'duration': 145, 'album_id': 5}
+
+        res = await self.client.patch(f'/{obj.pk}', data=data, FILES=files)
+        json = res.json()
+
+        self.assertEqual(res.status_code, 422)
+        self.assertIn('album_id', json['detail'][0]['loc'])
+
+    async def test_song_can_be_deleted(self):
+        artist = await Artist.objects.acreate(name='Squire Tuck')
+        album = await Album.objects.acreate(
+            name='Squire Tuck Soundtracks for the Soul',
+            artist=artist
+        )
+        obj = await Song.objects.acreate(
+            file=self.temp_file('song.mp3', upload_filename='old.mp3'),
+            album_id=album.pk, name='Test Song', duration=160,
+        )
+        self.assertTrue(self.file_exists('songs', 'old.mp3'))
+
+        res = await self.client.delete(f"/{obj.pk}")
+
+        self.assertEqual(res.status_code, 204)
+        self.assertFalse(self.file_exists('songs', 'old.mp3'))
+        self.assertEqual(await Song.objects.acount(), 0)
