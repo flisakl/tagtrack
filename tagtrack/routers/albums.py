@@ -30,27 +30,24 @@ async def create_album(
     image: UploadedFile | None = File(None)
 ):
     album = Album(**form.dict(exclude_unset=True))
-    try:
-        await Artist.objects.aget(pk=form.artist_id)
-    except Artist.DoesNotExist:
-        raise ValidationError([
-            utils.make_error(['form'], 'artist_id', _('Artist does not exist'))
-        ])
-
     if image:
         if err := utils.validate_image(image):
             raise err
         album.image = image
     try:
+        album.artist = await Artist.objects.aget(pk=form.artist_id)
         await album.asave()
         return 201, album
-
-    except IntegrityError as e:
-        if 'unique' in str(e).lower():
-            err = utils.make_error(
-                ['form'], 'name', _('Album already exists')
-            )
-            raise ValidationError([err])
+    except IntegrityError:
+        err = utils.make_error(
+            ['form'], 'name', _('Album already exists')
+        )
+        raise ValidationError([err])
+    except Artist.DoesNotExist:
+        err = utils.make_error(
+            ['form'], 'artist_id', _('Artist does not exist')
+        )
+        raise ValidationError([err])
 
 
 @router.get(
@@ -102,27 +99,22 @@ async def update_album(
 ):
     data = form.dict(exclude_unset=True)
     try:
-        await Artist.objects.aget(pk=form.artist_id)
+        obj = await aget_object_or_404(Album, pk=album_id)
+        obj.artist = await Artist.objects.aget(pk=form.artist_id)
+        if image and not utils.validate_image(image):
+            obj.image.delete(save=False)
+            obj.image.save(image.name, image, save=False)
+
+        for attr, value in data.items():
+            setattr(obj, attr, value)
+        await obj.asave()
+    except IntegrityError:
+        err = utils.make_error(['form'], 'name', _('Album already exists'))
+        raise ValidationError([err])
     except Artist.DoesNotExist:
         raise ValidationError([
             utils.make_error(['form'], 'artist_id', _('Artist does not exist'))
         ])
-
-    obj = await aget_object_or_404(Album, pk=album_id)
-    if image and not utils.validate_image(image):
-        await sync_to_async(obj.image.save)(image.name, image, save=False)
-
-    for attr, value in data.items():
-        setattr(obj, attr, value)
-
-    try:
-        await obj.asave()
-    except IntegrityError as e:
-        if 'unique' in str(e).lower():
-            err = utils.make_error(
-                ['form'], 'name', _('Album already exists')
-            )
-            raise ValidationError([err])
     key = f"albums:album_id={obj.pk}"
     await sync_to_async(cache.delete)(key)
     return obj
@@ -141,7 +133,6 @@ async def delete_album(
     # Update cache
     key = f"albums:album_id={obj.pk}"
     await sync_to_async(cache.delete)(key)
-    obj.image.delete(save=False)
     await obj.adelete()
 
     return obj
