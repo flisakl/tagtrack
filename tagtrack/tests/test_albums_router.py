@@ -103,16 +103,21 @@ class TestRouter(TestHelper):
 
     async def test_album_can_be_updated(self):
         art = await self.create_artist('Rammstein')
-        obj = await self.create_album(art, 'bad name')
+        file = self.temp_file(upload_filename='old.jpg')
+        obj = await self.create_album(art, 'bad name', image=file)
         data = {'name': 'Good name', 'year': 1990,
                 'genre': 'Metal', 'artist_id': art.pk}
+        f = {'image': self.temp_file()}
+        self.assertTrue(self.file_exists('albums', 'old.jpg'))
 
-        res = await self.client.patch(f"/{obj.pk}", data)
+        res = await self.client.patch(f"/{obj.pk}", data, FILES=f)
         json = res.json()
 
         del data['artist_id']
         self.assertEqual(res.status_code, 200)
         self.assertJSONMatchesDict(json, data)
+        self.assertFalse(self.file_exists('albums', 'old.jpg'))
+        self.assertTrue(self.file_exists('albums', 'image.jpg'))
 
     async def test_album_can_not_be_updated_with_non_existing_author(self):
         art = await self.create_artist('Rammstein')

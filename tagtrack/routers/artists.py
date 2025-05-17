@@ -132,7 +132,8 @@ async def update_artist(
         setattr(obj, attr, value)
 
     if image and not utils.validate_image(image):
-        await sync_to_async(obj.image.save)(image.name, image, save=False)
+        obj.image.delete(save=False)
+        obj.image.save(image.name, image, save=False)
 
     try:
         await obj.asave()
@@ -166,7 +167,6 @@ async def delete_artist(
     obj = await aget_object_or_404(Artist, pk=artist_id)
     key = f"artists:artist_id={obj.pk}"
     await sync_to_async(cache.delete)(key)
-    obj.image.delete(save=False)
     await obj.adelete()
 
     return obj

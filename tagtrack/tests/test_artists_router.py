@@ -63,14 +63,19 @@ class TestArtistRouter(TestHelper):
         self.assertEqual(json['albums'][1]['name'], albums[1].name)
 
     async def test_artist_can_be_updated(self):
-        art = await self.create_artist()
+        f = self.temp_file(upload_filename='old.jpg')
+        art = await self.create_artist(image=f)
         data = {'name': 'Ghost'}
+        f = {'image': self.temp_file()}
 
-        res = await self.client.patch(f"/{art.pk}", data)
+        self.assertTrue(self.file_exists('artists', 'old.jpg'))
+        res = await self.client.patch(f"/{art.pk}", data, FILES=f)
         json = res.json()
 
         self.assertEqual(res.status_code, 200)
         self.assertEqual(json['name'], data['name'])
+        self.assertFalse(self.file_exists('artists', 'old.jpg'))
+        self.assertTrue(self.file_exists('artists', 'image.jpg'))
 
     async def test_can_not_change_artist_name_to_already_taken_one(self):
         a1 = await self.create_artist('Billy Joel')
