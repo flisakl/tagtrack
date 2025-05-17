@@ -30,10 +30,9 @@ async def create_album(
     image: UploadedFile | None = File(None)
 ):
     album = Album(**form.dict(exclude_unset=True))
-    if image:
-        if err := utils.validate_image(image):
-            raise err
-        album.image = image
+    if err := utils.validate_image(image):
+        raise err
+    album.image = image
     try:
         album.artist = await Artist.objects.aget(pk=form.artist_id)
         await album.asave()
@@ -135,4 +134,4 @@ async def delete_album(
     await sync_to_async(cache.delete)(key)
     await obj.adelete()
 
-    return obj
+    return 204, None

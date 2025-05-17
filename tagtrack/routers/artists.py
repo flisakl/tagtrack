@@ -39,10 +39,9 @@ async def create_artist(
     """
     artist = Artist(**form.dict(exclude_unset=True))
 
-    if image:
-        if err := utils.validate_image(image):
-            raise err
-        artist.image = image
+    if err := utils.validate_image(image):
+        raise err
+    artist.image = image
 
     try:
         await artist.asave()
@@ -169,4 +168,4 @@ async def delete_artist(
     await sync_to_async(cache.delete)(key)
     await obj.adelete()
 
-    return obj
+    return 204, None

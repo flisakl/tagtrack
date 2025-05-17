@@ -20,12 +20,15 @@ def make_error(loc: list[str], field_name: str, msg: str):
 
 
 def validate_audio_file(
-    audio: TemporaryUploadedFile,
+    audio: TemporaryUploadedFile | None,
     loc: list[str] = ['form'],
     field: str = 'file'
 
 ) -> None | ValidationError:
     """Returns ValidationError when audio file is invalid"""
+    if audio is None:
+        return audio
+
     err = make_error(loc, field, _('File is not an audio file'))
     ve = ValidationError([err])
     if "audio" not in audio.content_type:
@@ -46,6 +49,9 @@ def validate_image(
 
 ) -> None | ValidationError:
     """Returns ValidationError when image is invalid"""
+    if image is None:
+        return image
+
     err = make_error(loc, field, _('File is not an image'))
     ve = ValidationError([err])
     if "image" not in image.content_type:

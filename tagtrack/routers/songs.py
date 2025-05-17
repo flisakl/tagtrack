@@ -45,13 +45,11 @@ async def create_song(
 
     if err := utils.validate_audio_file(file):
         raise err
-    else:
-        song.file = file
+    song.file = file
 
-    if image:
-        if err := utils.validate_image(image):
-            raise err
-        song.image = image
+    if err := utils.validate_image(image):
+        raise err
+    song.image = image
 
     await song.asave()
     qs = Artist.objects.filter(pk__in=artist_ids)
@@ -114,14 +112,12 @@ async def update_song(
             ])
         song.album_id = album
 
-    if file:
-        if err := utils.validate_audio_file(file):
-            raise err
+    if file and not utils.validate_audio_file(file):
+        song.file.delete(save=False)
         song.file.save(file.name, file, save=False)
 
-    if image:
-        if err := utils.validate_image(image):
-            raise err
+    if image and not utils.validate_image(image):
+        song.image.delete(save=False)
         song.image.save(image.name, image, save=False)
 
     for k, v in data.items():
@@ -153,8 +149,6 @@ async def delete_song(
     # Remove item from cache
     key = f"songs:song_id={obj.pk}"
     await sync_to_async(cache.delete)(key)
-    obj.image.delete(save=False)
-    obj.file.delete(save=False)
     await obj.adelete()
 
-    return obj
+    return 204, None
