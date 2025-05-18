@@ -177,3 +177,4 @@ test.py
 # Django project
 mysite/
 manage.py
+test_files/

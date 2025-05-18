@@ -15,7 +15,7 @@ class TestHelper(TestCase):
                   upload_filename: str = None):
         fname = upload_filename if upload_filename else name
         tuf = TemporaryUploadedFile(fname, mime, 0, 'utf-8')
-        fp = path.join(path.dirname(__file__), name)
+        fp = path.join(path.dirname(__file__), 'test_files/', name)
         file = self.load_file(fp)
         tuf.file.write(file.read())
         file.close()
