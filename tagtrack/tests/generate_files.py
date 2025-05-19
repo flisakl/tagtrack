@@ -3,7 +3,7 @@ from pathlib import Path
 from PIL import Image
 import numpy as np
 import wave
-from mutagen.id3 import ID3, TIT2, TALB, TDRC, TCON, TRCK, APIC, TPE1
+from mutagen.id3 import ID3, TIT2, TALB, TDRC, TCON, TRCK, APIC, TPE1, TPE2
 from mutagen.flac import FLAC, Picture
 from mutagen.oggvorbis import OggVorbis
 from mutagen.oggopus import OggOpus
@@ -22,7 +22,8 @@ metadata = {
         "name": "Cold Spring Harbor",
         "release_year": "1970",
         "genre": "Electronic",
-        "cover_image": str(image_path)
+        "cover_image": str(image_path),
+        "artist": "Billy Joel"
     },
     "position": "1",
     "artists": [
@@ -108,6 +109,7 @@ def embed_metadata(filepath, format, metadata):
         audio.add(TCON(encoding=3, text=genre))
         audio.add(TRCK(encoding=3, text=track))
         audio.add(TPE1(encoding=3, text=artist_names))
+        audio.add(TPE2(encoding=3, text=album["artist"]))
 
         # Add album cover
         audio.add(APIC(encoding=3, mime='image/jpeg', type=3, desc='Cover', data=cover_data))
@@ -129,6 +131,7 @@ def embed_metadata(filepath, format, metadata):
         audio = FLAC(filepath)
         audio["title"] = title
         audio["album"] = album_name
+        audio["albumartist"] = album['artist']
         audio["date"] = year
         audio["genre"] = genre
         audio["tracknumber"] = track
@@ -166,6 +169,7 @@ def embed_metadata(filepath, format, metadata):
             audio = OggOpus(filepath)
         audio["title"] = title
         audio["album"] = album_name
+        audio["albumartist"] = album['artist']
         audio["date"] = year
         audio["genre"] = genre
         audio["tracknumber"] = track
@@ -181,6 +185,7 @@ def embed_metadata(filepath, format, metadata):
         audio["\xa9gen"] = genre
         audio["trkn"] = [(int(track), 0)]
         audio["\xa9ART"] = artist_names
+        audio["aART"] = artist_names
 
         # Embed album cover only (MP4 supports only one cover image)
         audio["covr"] = [MP4Cover(cover_data, imageformat=MP4Cover.FORMAT_JPEG)]
