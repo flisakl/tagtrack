@@ -6,6 +6,7 @@ from ninja.errors import ValidationError
 from asgiref.sync import sync_to_async
 from PIL import Image
 from mutagen import File
+from mutagen.id3 import APIC
 
 from tagtrack.models import Album, Song
 
@@ -80,3 +81,16 @@ def fill_song_fields(song: Song, album: Album):
     song.image = album.image
     song.genre = song.genre if song.genre else album.genre
     song.year = song.year if song.year else album.year
+
+
+def make_tempfile_from_apic_frame(frame: APIC | None):
+    if not frame:
+        return None
+    elif frame.mime == '->':
+        return None
+
+    tf = TemporaryUploadedFile(content_type=frame.mime, size=0)
+    tf.file.write(frame.data)
+    if not validate_image(tf):
+        return tf
+    return None

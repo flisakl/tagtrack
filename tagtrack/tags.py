@@ -29,6 +29,7 @@ class ID3Editor(Editor):
         album_artist = tags.get('TPE2').text[0] if tags.get('TPE2') else None
         artists_raw = tags.get('TPE1').text if tags.get('TPE1') else []
         track_number = int(tags.get('TRCK').text[0].split('/')[0]) if tags.get('TRCK') else 1
+        track_image = None
 
         # Extract all APIC frames for matching artist images
         apic_frames = [frame for frame in tags.values() if isinstance(frame, APIC)]
@@ -36,14 +37,17 @@ class ID3Editor(Editor):
         def find_image_for_name(name: str):
             for apic in apic_frames:
                 if apic.desc.strip().lower() == name.strip().lower():
-                    return apic.data
+                    return apic
             return None
 
         # Album image (PictureType is COVER_FRONT or MEDIA)
         album_image = None
         for apic in apic_frames:
             if apic.type in [PictureType.MEDIA, PictureType.COVER_FRONT]:
-                album_image = apic.data
+                if album_name:
+                    album_image = apic
+                else:
+                    track_image = apic
                 break
 
         artists: list[Dict[str, Any]] = []
@@ -53,19 +57,35 @@ class ID3Editor(Editor):
                 "image": find_image_for_name(name)
             })
 
-        metadata = {
-            "album": {
+        album_artist_name = album_artist or (
+            artists[0]['name'] if artists else None
+        )
+        if album_artist_name:
+            album_artist = {
+                'name': album_artist_name,
+                'image': find_image_for_name(album_artist_name)
+            }
+        else:
+            album_artist = None
+
+        album = None
+        if album_name:
+            album = {
                 "name": album_name,
                 "image": album_image,
                 "year": album_year,
-                "artist": album_artist or (artists[0]['name'] if artists else None)
-            },
+                "artist": album_artist
+            }
+
+        metadata = {
+            "album": album,
             "name": tags.get('TIT2').text[0] if tags.get('TIT2') else 'unnamed',
             "year": album_year,
             "genre": tags.get('TCON').text[0] if tags.get('TCON') else None,
             "duration": int(file.info.length),
             "number": track_number,
-            "artists": artists
+            "artists": artists,
+            "image": track_image
         }
 
         return metadata
@@ -81,3 +101,4 @@ def read_metadata(file: TemporaryUploadedFile) -> dict:
             editor = ID3Editor()
 
         return editor.read_metadata(f)
+    return None

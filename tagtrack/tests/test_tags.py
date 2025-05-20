@@ -16,7 +16,7 @@ class TestEditors(TestHelper):
         self.assertTrue(meta['album']["image"])
         self.assertEqual(meta['album']["name"], "Cold Spring Harbor")
         self.assertEqual(meta['album']["year"], 1970)
-        self.assertEqual(meta['album']["artist"], "Billy Joel")
+        self.assertEqual(meta['album']["artist"]['name'], "Billy Joel")
         self.assertEqual("Billy Joel", meta['artists'][0]["name"])
         self.assertEqual("Kaneko Ayano", meta['artists'][1]["name"])
         self.assertTrue(meta['artists'][0]["image"])
