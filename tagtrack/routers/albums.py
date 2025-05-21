@@ -67,7 +67,7 @@ async def get_albums(
     Each album includes the number of songs and total duration (in minutes).
     Results are cached based on the querystring.
     """
-    key = f"albums:{urlencode(request.GET, doseq=True)}"
+    key = f"albums:{urlencode(sorted(request.GET.items()), doseq=True)}"
     qs = filters.filter(Album.objects.annotate(
         song_count=Count('songs'),
         total_duration=Sum('songs__duration') / 60

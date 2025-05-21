@@ -70,7 +70,7 @@ async def get_artists(
     - Annotates artist entries with counts of related songs and albums.
     - Results are cached by querystring.
     """
-    key = f"artists:{urlencode(request.GET, doseq=True)}"
+    key = f"artists:{urlencode(sorted(request.GET.items()), doseq=True)}"
     qs = filters.filter(Artist.objects.annotate(
         song_count=Count('songs'),
         album_count=Count('albums')
