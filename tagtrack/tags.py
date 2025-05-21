@@ -162,7 +162,7 @@ class ID3Editor(Editor):
 
     def write_metadata(
         self,
-        file: FieldFile,
+        file: FieldFile | TemporaryUploadedFile,
         metadata: Dict[str, Any]
     ) -> None:
         tags = ID3()
@@ -190,11 +190,14 @@ class ID3Editor(Editor):
         # Add front cover image
         if metadata.get('image') and not album:
             if f := self._make_apic_frame(
-                metadata['image'], 'TrackCover', PictureType.COVER_FRONT
+                metadata['image'], metadata['name'], PictureType.COVER_FRONT
             ):
                 tags.add(f)
 
-        tags.save(file.path)
+        if isinstance(file, FieldFile):
+            tags.save(file.path)
+        else:
+            tags.save(file.temporary_file_path())
 
     def _set_artist_tags(
         self,
@@ -204,7 +207,7 @@ class ID3Editor(Editor):
         artist_names = [artist['name'] for artist in artists]
         tags.add(TPE1(encoding=3, text=artist_names))
         for artist in artists:
-            if artist['image']:
+            if 'image' in artist:
                 if f := self._make_apic_frame(
                     artist['image'],
                     artist['name'],

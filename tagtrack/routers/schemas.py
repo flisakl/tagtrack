@@ -1,4 +1,4 @@
-from ninja import ModelSchema, Field, FilterSchema
+from ninja import ModelSchema, Field, FilterSchema, Schema
 
 from tagtrack.models import Artist, Song, Album
 
@@ -123,3 +123,9 @@ class SingleSongSchemaOut(ModelSchema):
         model = Song
         fields = ['name', 'duration', 'genre', 'year', 'image', 'file',
                   'number']
+
+
+class UploadSchemaOut(Schema):
+    total_count: int
+    invalid_count: int
+    invalid_files: list = []

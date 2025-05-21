@@ -1,8 +1,12 @@
 from ninja.testing import TestAsyncClient
 from .helper import TestHelper
+from asgiref.sync import sync_to_async
+from django.utils.datastructures import MultiValueDict
+from mutagen import File
 
 from tagtrack.routers import songs_router
 from tagtrack.models import Artist, Album, Song
+from tagtrack.tags import ID3Editor
 
 
 class TestSongRouter(TestHelper):
@@ -131,3 +135,134 @@ class TestSongRouter(TestHelper):
         self.assertEqual(res.status_code, 204)
         self.assertFalse(self.file_exists('songs', 'old.mp3'))
         self.assertEqual(await Song.objects.acount(), 0)
+
+    async def test_songs_can_be_uploaded(self):
+        meta = [
+            {
+                'name': 'Lose Yourself',
+                'genre': 'Rap',
+                'year': 2013,
+                'number': 4,
+                'artists': [{'name': 'Eminem'}, {'name': 'Rihanna'}],
+                'album': {'name': 'The Marshall', 'year': 2013, 'genre': 'Hip-Hop', 'artist': 'Eminem'}
+            },
+            {
+                'name': 'Rap God',
+                'genre': 'Rap',
+                'year': 2013,
+                'number': 4,
+                'artists': [{'name': 'Eminem'}],
+                'album': {'name': 'The Marshall', 'year': 2013, 'genre': 'Hip-Hop', 'artist': 'Eminem'}
+            },
+            {
+                'name': '',
+                'genre': 'Rock',
+                'year': 1996,
+                'number': 2,
+                'artists': [{'name': 'Pearl Jam'}],
+                'album': {'name': 'No Code', 'year': 1996, 'genre': 'Rock'}
+            },
+        ]
+
+        f = [
+            self.temp_file('song.mp3', 'audio/mpeg', f"song{x}.mp3")
+            for x in range(len(meta))
+        ]
+        editor = ID3Editor()
+        for i, data in enumerate(meta):
+            editor.write_metadata(f[i], data)
+
+        f = MultiValueDict({'files': f})
+
+        response = await self.client.post('/upload', FILES=f)
+        json = response.json()
+
+        expected = {
+            'total_count':  3,
+            'invalid_count':  0,
+            'invalid_files':  [],
+        }
+        self.assertEqual(response.status_code, 200)
+        self.assertJSONMatchesDict(json, expected)
+        # Check if artists are created
+        artists = await sync_to_async(list)(Artist.objects.all())
+        self.assertEqual(len(artists), 3)
+        for art in artists:
+            self.assertIn(art.name, ['Pearl Jam', 'Eminem', 'Rihanna'])
+        # Check if albums are created and artists are attached
+        albums = await sync_to_async(list)(Album.objects.select_related('artist').all())
+        self.assertEqual(len(albums), 2)
+        for alb in albums:
+            if alb.name == meta[0]['album']['name']:
+                self.assertEqual(alb.artist.name, meta[0]['album']['artist'])
+                self.assertEqual(alb.year, meta[0]['album']['year'])
+                # Despite setting album genre to 'Hip-Hop', Rap is picked
+                # because it is most occurring genre in songs from this album
+                self.assertEqual(alb.genre, 'Rap')
+            if alb.name == meta[2]['album']['name']:
+                self.assertEqual(alb.artist.name, 'Pearl Jam')
+                self.assertEqual(alb.year, meta[2]['album']['year'])
+                self.assertEqual(alb.genre, meta[2]['album']['genre'])
+        # Check if songs are created
+        qs = Song.objects.prefetch_related('artists').select_related('album').all()
+        songs = await sync_to_async(list)(qs)
+        self.assertEqual(len(songs), 3)
+        first = songs[0]
+        second = songs[1]
+        third = songs[2]
+        self.assertEqual(len(first.artists.all()), 2)
+        self.assertEqual(first.album.name, meta[0]['album']['name'])
+        self.assertEqual(len(second.artists.all()), 1)
+        self.assertEqual(second.album.name, meta[0]['album']['name'])
+        self.assertEqual(len(third.artists.all()), 1)
+        self.assertEqual(third.album.name, meta[2]['album']['name'])
+
+    async def test_untagged_files_can_be_uploaded(self):
+        files = [
+            self.temp_file('song.mp3', 'audio/mpeg', f"song_untagged{x}.mp3")
+            for x in range(3)
+        ]
+        for f in files:
+            file = File(f.temporary_file_path())
+            file.delete()
+        f = MultiValueDict({'files': files})
+
+        response = await self.client.post('/upload', FILES=f)
+        json = response.json()
+
+        expected = {
+            'total_count':  3,
+            'invalid_count':  0,
+            'invalid_files':  [],
+        }
+        self.assertEqual(response.status_code, 200)
+        self.assertJSONMatchesDict(json, expected)
+        self.assertEqual(3, await Song.objects.acount())
+        self.assertEqual(0, await Album.objects.acount())
+        self.assertEqual(0, await Artist.objects.acount())
+
+    async def test_junk_files_are_ignored(self):
+        files = [
+            self.temp_file('song.mp3', 'audio/mpeg', "song_untagged_0.mp3"),
+            self.temp_file('junk.mp3', 'audio/mpeg', "junk_untagged_1.mp3"),
+            self.temp_file('junk.jpg', 'audio/mpeg', "junk_untagged_1.jpg"),
+        ]
+        File(files[0].temporary_file_path()).delete()
+        f = MultiValueDict({'files': files})
+
+        response = await self.client.post('/upload', FILES=f)
+        json = response.json()
+
+        expected = {
+            'total_count':  3,
+            'invalid_count':  2,
+            'invalid_files':  [
+                "junk_untagged_1.mp3",
+                "junk_untagged_1.jpg",
+            ],
+        }
+        self.assertEqual(response.status_code, 200)
+        self.assertJSONMatchesDict(json, expected)
+        self.assertEqual(1, await Song.objects.acount())
+        self.assertEqual(0, await Album.objects.acount())
+        self.assertEqual(0, await Artist.objects.acount())
