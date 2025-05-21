@@ -5,7 +5,7 @@ from django.core.cache import cache
 from ninja.errors import ValidationError
 from asgiref.sync import sync_to_async
 from PIL import Image
-from mutagen import File
+import subprocess
 from mutagen.id3 import APIC
 
 from tagtrack.models import Album, Song
@@ -35,9 +35,17 @@ def validate_audio_file(
     if "audio" not in audio.content_type:
         return ve
 
+    cmd = [
+            'ffprobe',
+            '-v', 'error',
+            '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1',
+            audio.temporary_file_path()
+        ]
     try:
-        if not File(audio.file):
-            return ve
+        result = subprocess.run(
+            cmd, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, check=True, text=True)
     except Exception:
         return ve
     return None
@@ -89,7 +97,9 @@ def make_tempfile_from_apic_frame(frame: APIC | None):
     elif frame.mime == '->':
         return None
 
-    tf = TemporaryUploadedFile(content_type=frame.mime, size=0)
+    tf = TemporaryUploadedFile(
+        frame.desc, content_type=frame.mime, size=0, charset=frame.encoding
+    )
     tf.file.write(frame.data)
     if not validate_image(tf):
         return tf
