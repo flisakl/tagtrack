@@ -16,6 +16,8 @@ class TestEditors(TestHelper):
         album = await self.create_album(aa, 'Test Album', 'Metal', 1970, self.temp_file())
         song = await self.create_song(
             self.temp_file('song.mp3', 'audio/mpeg'),
+            'Test Song Name',
+            'Metal',
             artists=artists, image=self.temp_file(),
             album=album
         )
@@ -61,3 +63,44 @@ class TestEditors(TestHelper):
         self.assertEqual("Kaneko Ayano", meta['artists'][1]["name"])
         self.assertTrue(meta['artists'][0]["image"])
         self.assertTrue(meta['artists'][1]["image"])
+
+    async def test_metadata_are_written_properly_to_mp3_files(self):
+        aa = await self.create_artist('Billy Joel', image=self.temp_file())
+        artists = [
+            aa,
+            await self.create_artist('Kaneko Ayano', image=self.temp_file()),
+            await self.create_artist('Johnny Cash', image=self.temp_file()),
+        ]
+        album = await self.create_album(aa, 'Test Album', 'Metal', 1970, self.temp_file())
+        song = await self.create_song(
+            self.temp_file('song.mp3', 'audio/mpeg'),
+            artists=artists, image=self.temp_file(), album=album, genre='Metal'
+        )
+        song = await Song.objects.prefetch_related('artists').select_related(
+            'album__artist').aget(pk=song.pk)
+        meta = Editor().song_to_metadata(song)
+        editor = ID3Editor()
+
+        editor.write_metadata(song.file, meta)
+
+        read = editor.read_metadata(File(song.file))
+        # Song properties
+        self.assertEqual(read['name'], song.name)
+        self.assertEqual(read['year'], song.year)
+        self.assertEqual(read['genre'], song.genre)
+        self.assertEqual(read['number'], song.number)
+        self.assertIn('image', read.keys())
+        self.assertIn('album', read.keys())
+        # Album properties
+        alb = read['album']
+        self.assertEqual(alb['name'], album.name)
+        self.assertEqual(alb['genre'], album.genre)
+        self.assertEqual(alb['year'], album.year)
+        self.assertEqual(alb['artist']['name'], aa.name)
+        self.assertIn('image', alb.keys())
+        # Artists
+        art = read['artists']
+        self.assertEqual(len(art), 3)
+        self.assertEqual(art[0]['name'], artists[0].name)
+        self.assertEqual(art[1]['name'], artists[1].name)
+        self.assertEqual(art[2]['name'], artists[2].name)
