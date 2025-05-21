@@ -1,19 +1,57 @@
 from django.core.files.uploadedfile import TemporaryUploadedFile
-from abc import ABC, abstractmethod
 from typing import Dict, Any
 from mutagen import File
 from mutagen.id3 import ID3FileType, PictureType
 from mutagen.id3 import APIC, TPE1, TPE2, TALB, TIT2, TDRC, TCON, TRCK
+from mutagen._constants import GENRES
+from .models import Song
 
 
-class Editor(ABC):
-    @abstractmethod
+class Editor:
     def read_metadata(self, file) -> Dict[str, Any]:
-        pass
+        raise NotImplementedError()
 
-    @abstractmethod
     def write_metadata(self, file, metadata: Dict[str, Any]) -> None:
-        pass
+        raise NotImplementedError()
+
+    def _set_genre(self, genre: str, data: dict):
+        if genre and genre in GENRES:
+            data['genre'] = genre
+
+
+    def song_to_metadata(self, song: Song) -> dict:
+        meta = {
+            'name': song.name,
+            'number': song.number,
+            'year': song.year
+        }
+        self._set_genre(song.genre, meta)
+        if song.image:
+            meta['image'] = song.image
+
+        if song.album:
+            album = song.album
+            alb = {
+                'name': album.name,
+                'artist': album.artist.name,
+            }
+            self._set_genre(album.genre, alb)
+            if album.year:
+                alb['year'] = album.year
+            if album.image:
+                alb['image'] = album.image
+            meta['album'] = alb
+        artists = []
+        for art in song.artists.all():
+            data = {
+                'name': art.name,
+            }
+            if art.image:
+                data['image'] = art.image
+            artists.append(data)
+        meta['artists'] = artists
+
+        return meta
 
 
 class ID3Editor(Editor):

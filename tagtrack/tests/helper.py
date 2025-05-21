@@ -53,7 +53,8 @@ class TestHelper(TestCase):
         songs: list[Song] = []
     ):
         obj = await Album.objects.acreate(
-            name=name, image=image, artist=artist
+            name=name, image=image, artist=artist,
+            genre=genre, year=year
         )
         if songs:
             await obj.songs.aset(songs)
