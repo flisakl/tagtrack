@@ -1,5 +1,7 @@
 from ninja.testing import TestAsyncClient
 from .helper import TestHelper
+import zipfile
+from io import BytesIO
 
 from tagtrack.routers import albums_router
 from tagtrack.models import Album
@@ -157,3 +159,26 @@ class TestRouter(TestHelper):
         self.assertEqual(res.status_code, 204)
         self.assertFalse(self.file_exists('albums', 'old.jpg'))
         self.assertEqual(await Album.objects.acount(), 0)
+
+    async def test_album_can_be_downloaded(self):
+        art = await self.create_artist()
+        alb = await self.create_album(art)
+        await self.create_song(
+            self.temp_file('song.mp3', 'audio/mpeg', 'song1.mp3'),
+            album=alb
+        )
+        await self.create_song(
+            self.temp_file('song.mp3', 'audio/mpeg', 'song2.mp3'),
+            album=alb
+        )
+
+        response = await self.client.get(f'/{alb.pk}/download')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers['Content-Type'], 'application/zip')
+        self.assertTrue(response.headers['Content-Disposition'].startswith('attachment'))
+        zip_content = BytesIO(response.content)
+        with zipfile.ZipFile(zip_content) as zf:
+            names = zf.namelist()
+        self.assertIn('song1.mp3', names)
+        self.assertIn('song2.mp3', names)

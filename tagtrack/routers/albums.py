@@ -10,8 +10,8 @@ from asgiref.sync import sync_to_async
 from urllib.parse import urlencode
 
 from tagtrack import ALBUM_AUTH
-from tagtrack import utils
-from tagtrack.models import Album, Artist
+from tagtrack import utils, tags
+from tagtrack.models import Album, Artist, Song
 from .schemas import (
     AlbumSchemaIn, AlbumSchemaOut, AlbumFilterSchema, SingleAlbumSchemaOut
 )
@@ -47,7 +47,8 @@ async def create_album(
         err = utils.make_error(['form'], 'name', _('Album already exists'))
         raise ValidationError([err])
     except Artist.DoesNotExist:
-        err = utils.make_error(['form'], 'artist_id', _('Artist does not exist'))
+        err = utils.make_error(['form'], 'artist_id',
+                               _('Artist does not exist'))
         raise ValidationError([err])
 
 
@@ -158,3 +159,21 @@ async def delete_album(
     await sync_to_async(cache.delete)(key)
     await obj.adelete()
     return 204, None
+
+
+@router.get(
+    '{int:album_id}/download',
+    auth=ALBUM_AUTH['DOWNLOAD']
+)
+async def download_album(request, album_id: int):
+    qs = Song.objects.prefetch_related('artists').select_related(
+        'album__artist').filter(album_id=album_id)
+    songs = await sync_to_async(list)(qs)
+    for song in songs:
+        if song.retag:
+            await tags.write_metadata(song)
+
+    zipfile = await utils.make_zip_file(songs)
+    res = utils.CloseFileResponse(
+        zipfile, as_attachment=True, filename='songs.zip')
+    return res
