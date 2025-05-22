@@ -6,6 +6,7 @@ from ninja.errors import ValidationError
 from ninja.pagination import paginate
 from asgiref.sync import sync_to_async
 from urllib.parse import urlencode
+from django.http import FileResponse
 
 from tagtrack import utils, tags
 from tagtrack.models import Album, Artist, Song
@@ -13,7 +14,7 @@ from .schemas import (
     SongSchemaIn, SongSchemaOut, SingleSongSchemaOut, SongFilterSchema,
     UploadSchemaOut
 )
-from tagtrack import SONG_AUTH
+from tagtrack import SONG_AUTH, MAX_SONG_DOWNLOAD
 
 router = Router(tags=["Songs"])
 
@@ -533,13 +534,14 @@ async def create_songs(
 
 @router.get(
     '/download',
-    auth=SONG_AUTH['DOWNLOAD']
+    auth=SONG_AUTH['DOWNLOAD'],
+    response={404: dict}
 )
 async def download_songs(
     request,
-    song_ids: Query[list[int]]
+    song_ids: Query[list[int]],
 ):
-    if (len(song_ids) > 30):
+    if (len(song_ids) > MAX_SONG_DOWNLOAD):
         err = {
             'loc': ['query', 'song_ids'],
             'msg': _('Requested too many files')
@@ -552,7 +554,13 @@ async def download_songs(
         if song.retag:
             await tags.write_metadata(song)
 
-    zipfile = await utils.make_zip_file(songs)
-    res = utils.CloseFileResponse(
-        zipfile, as_attachment=True, filename='songs.zip')
-    return res
+    if len(songs) > 1:
+        zipfile = await utils.make_zip_file(songs)
+        return utils.CloseFileResponse(
+            zipfile, as_attachment=True, filename='songs.zip')
+    elif len(songs) == 1:
+        return FileResponse(
+            songs[0].file, as_attachment=True
+        )
+
+    return 404, {'detail': _('Not Found: No songs found')}

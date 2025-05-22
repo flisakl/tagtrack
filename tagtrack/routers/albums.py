@@ -163,7 +163,8 @@ async def delete_album(
 
 @router.get(
     '{int:album_id}/download',
-    auth=ALBUM_AUTH['DOWNLOAD']
+    auth=ALBUM_AUTH['DOWNLOAD'],
+    response={404: dict}
 )
 async def download_album(request, album_id: int):
     qs = Song.objects.prefetch_related('artists').select_related(
@@ -173,7 +174,9 @@ async def download_album(request, album_id: int):
         if song.retag:
             await tags.write_metadata(song)
 
-    zipfile = await utils.make_zip_file(songs)
-    res = utils.CloseFileResponse(
-        zipfile, as_attachment=True, filename='songs.zip')
-    return res
+    if len(songs):
+        zipfile = await utils.make_zip_file(songs)
+        res = utils.CloseFileResponse(
+            zipfile, as_attachment=True, filename='songs.zip')
+        return res
+    return 404, {'detail': _('Not Found: No songs found')}

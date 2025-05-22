@@ -10,6 +10,12 @@ default = {
     'DOWNLOAD': None,
 }
 
+MAX_SONG_DOWNLOAD = getattr(
+    settings,
+    "TAGTRACK_MAX_SONG_DOWNLOAD",
+    20
+)
+
 
 def _set_auth_from_settings(key_to_check: str):
     tagtrack_auth = getattr(settings, "TAGTRACK_AUTH", None)
