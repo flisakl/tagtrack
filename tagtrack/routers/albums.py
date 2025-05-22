@@ -1,5 +1,4 @@
 from ninja import Router, Form, File, UploadedFile, Query
-from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Count, Sum
 from django.db import IntegrityError
@@ -10,6 +9,7 @@ from ninja.pagination import paginate
 from asgiref.sync import sync_to_async
 from urllib.parse import urlencode
 
+from tagtrack import ALBUM_AUTH
 from tagtrack import utils
 from tagtrack.models import Album, Artist
 from .schemas import (
@@ -22,7 +22,7 @@ router = Router(tags=["Albums"])
 @router.post(
     '',
     response={201: AlbumSchemaOut},
-    auth=settings.TAGTRACK_AUTH['CREATE'],
+    auth=ALBUM_AUTH['CREATE'],
     description="Create a new album with optional cover image. Requires a valid artist ID."
 )
 async def create_album(
@@ -54,7 +54,7 @@ async def create_album(
 @router.get(
     '',
     response=list[AlbumSchemaOut],
-    auth=settings.TAGTRACK_AUTH['READ'],
+    auth=ALBUM_AUTH['READ'],
     description="List albums with filtering and pagination. Includes song count and total duration in minutes."
 )
 @paginate
@@ -78,7 +78,7 @@ async def get_albums(
 @router.get(
     '/{int:album_id}',
     response=SingleAlbumSchemaOut,
-    auth=settings.TAGTRACK_AUTH['READ'],
+    auth=ALBUM_AUTH['READ'],
     description="Retrieve a single album by ID, including related songs and artist."
 )
 async def get_album(request, album_id: int):
@@ -101,7 +101,7 @@ async def get_album(request, album_id: int):
 @router.patch(
     '/{int:album_id}',
     response=AlbumSchemaOut,
-    auth=settings.TAGTRACK_AUTH['UPDATE'],
+    auth=ALBUM_AUTH['UPDATE'],
     description="Update an existing album's details and optionally replace its image."
 )
 async def update_album(
@@ -141,7 +141,7 @@ async def update_album(
 @router.delete(
     '/{int:album_id}',
     response={204: None},
-    auth=settings.TAGTRACK_AUTH['DELETE'],
+    auth=ALBUM_AUTH['DELETE'],
     description="Delete an album by ID. Also clears cache and deletes associated image."
 )
 async def delete_album(

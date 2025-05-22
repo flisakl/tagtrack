@@ -1,5 +1,4 @@
 from ninja import Router, Form, File, UploadedFile, Query
-from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Count
 from django.db import IntegrityError
@@ -10,6 +9,7 @@ from ninja.pagination import paginate
 from asgiref.sync import sync_to_async
 from urllib.parse import urlencode
 
+from tagtrack import ARTIST_AUTH
 from tagtrack import utils
 from tagtrack.models import Artist
 from .schemas import (
@@ -22,7 +22,7 @@ router = Router(tags=["Artists"])
 @router.post(
     '',
     response={201: ArtistSchemaOut},
-    auth=settings.TAGTRACK_AUTH['CREATE'],
+    auth=ARTIST_AUTH['CREATE'],
     description="Create a new artist with optional image upload."
 )
 async def create_artist(
@@ -55,7 +55,7 @@ async def create_artist(
 @router.get(
     '',
     response=list[ArtistSchemaOut],
-    auth=settings.TAGTRACK_AUTH['READ'],
+    auth=ARTIST_AUTH['READ'],
     description="Retrieve a paginated list of artists with optional filtering."
 )
 @paginate
@@ -81,7 +81,7 @@ async def get_artists(
 @router.get(
     '/{int:artist_id}',
     response=SingleArtistSchemaOut,
-    auth=settings.TAGTRACK_AUTH['READ'],
+    auth=ARTIST_AUTH['READ'],
     description="Retrieve details for a specific artist by ID."
 )
 async def get_artist(request, artist_id: int):
@@ -108,7 +108,7 @@ async def get_artist(request, artist_id: int):
 @router.patch(
     '/{int:artist_id}',
     response=ArtistSchemaOut,
-    auth=settings.TAGTRACK_AUTH['UPDATE'],
+    auth=ARTIST_AUTH['UPDATE'],
     description="Update an existing artist by ID, including optional image replacement."
 )
 async def update_artist(
@@ -149,7 +149,7 @@ async def update_artist(
 @router.delete(
     '/{int:artist_id}',
     response={204: None},
-    auth=settings.TAGTRACK_AUTH['DELETE'],
+    auth=ARTIST_AUTH['DELETE'],
     description="Delete an artist by ID and clear associated cache."
 )
 async def delete_artist(

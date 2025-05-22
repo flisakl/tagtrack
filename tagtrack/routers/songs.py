@@ -1,5 +1,4 @@
 from ninja import Router, Form, File, UploadedFile, Query
-from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 from django.shortcuts import aget_object_or_404
 from django.core.cache import cache
@@ -14,6 +13,7 @@ from .schemas import (
     SongSchemaIn, SongSchemaOut, SingleSongSchemaOut, SongFilterSchema,
     UploadSchemaOut
 )
+from tagtrack import SONG_AUTH
 
 router = Router(tags=["Songs"])
 
@@ -21,7 +21,7 @@ router = Router(tags=["Songs"])
 @router.post(
     '',
     response={201: SingleSongSchemaOut},
-    auth=settings.TAGTRACK_AUTH['CREATE'],
+    auth=SONG_AUTH['CREATE'],
     description="Create a new song with required audio file and optional image. Assigns to album and artists if provided."
 )
 async def create_song(
@@ -71,7 +71,7 @@ async def create_song(
 @router.get(
     '',
     response=list[SongSchemaOut],
-    auth=settings.TAGTRACK_AUTH['READ'],
+    auth=SONG_AUTH['READ'],
     description="Retrieve a paginated list of songs with filtering support. Includes related album info."
 )
 @paginate
@@ -92,7 +92,7 @@ async def get_songs(
 @router.get(
     '/{int:song_id}',
     response=SingleSongSchemaOut,
-    auth=settings.TAGTRACK_AUTH['READ'],
+    auth=SONG_AUTH['READ'],
     description="Retrieve a single song by ID. Includes related album and artists."
 )
 async def get_song(request, song_id: int):
@@ -108,7 +108,7 @@ async def get_song(request, song_id: int):
 @router.patch(
     '/{int:song_id}',
     response={200: SingleSongSchemaOut},
-    auth=settings.TAGTRACK_AUTH['UPDATE'],
+    auth=SONG_AUTH['UPDATE'],
     description="Update song metadata. Supports updating audio and image files, artist associations, and album."
 )
 async def update_song(
@@ -169,7 +169,7 @@ async def update_song(
 @router.delete(
     '/{int:song_id}',
     response={204: None},
-    auth=settings.TAGTRACK_AUTH['DELETE'],
+    auth=SONG_AUTH['DELETE'],
     description="Delete a song by ID. Removes cache and file attachments."
 )
 async def delete_song(
@@ -191,7 +191,7 @@ async def delete_song(
 @router.post(
     '/upload',
     response=UploadSchemaOut,
-    auth=settings.TAGTRACK_AUTH['CREATE'],
+    auth=SONG_AUTH['CREATE'],
     description="""
     Upload multiple audio files, extract metadata (title, artist, album, genre),
     and populate the database with any new songs, albums, or artists. Also handles
@@ -533,7 +533,7 @@ async def create_songs(
 
 @router.get(
     '/download',
-    auth=settings.TAGTRACK_AUTH['DOWNLOAD']
+    auth=SONG_AUTH['DOWNLOAD']
 )
 async def download_songs(
     request,
