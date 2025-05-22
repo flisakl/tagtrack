@@ -75,7 +75,7 @@ async def create_song(
     description="Retrieve a paginated list of songs with filtering support. Includes related album info."
 )
 @paginate
-async def get_albums(
+async def get_songs(
     request,
     filters: Query[SongFilterSchema]
 ):
@@ -529,3 +529,30 @@ async def create_songs(
                 SongArtist(song=song['instance'], artist=art)
             )
     await SongArtist.objects.abulk_create(song_artist_instances)
+
+
+@router.get(
+    '/download',
+    auth=settings.TAGTRACK_AUTH['DOWNLOAD']
+)
+async def download_songs(
+    request,
+    song_ids: Query[list[int]]
+):
+    if (len(song_ids) > 30):
+        err = {
+            'loc': ['query', 'song_ids'],
+            'msg': _('Requested too many files')
+        }
+        return 422, {'detail': [err]}
+    qs = Song.objects.prefetch_related('artists').select_related(
+        'album__artist').filter(pk__in=song_ids)
+    songs = await sync_to_async(list)(qs)
+    for song in songs:
+        if song.retag:
+            await tags.write_metadata(song)
+
+    zipfile = await utils.make_zip_file(songs)
+    res = utils.CloseFileResponse(
+        zipfile, as_attachment=True, filename='songs.zip')
+    return res

@@ -4,9 +4,13 @@ from django.shortcuts import aget_object_or_404
 from django.core.cache import cache
 from ninja.errors import ValidationError
 from asgiref.sync import sync_to_async
+from django.http import FileResponse
 from PIL import Image
 import subprocess
 from mutagen.id3 import APIC
+import io
+import zipfile
+from os import path
 
 from tagtrack.models import Album, Song
 
@@ -111,3 +115,19 @@ async def make_tempfile_from_apic_frame(frame: APIC | None):
     if not await validate_image(tf):
         return tf
     return None
+
+
+async def make_zip_file(songs: list[Song]):
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED, compresslevel=3) as zf:
+        for s in songs:
+            zf.write(s.file.path, path.basename(s.file.path))
+    buffer.seek(0)
+    return buffer
+
+
+class CloseFileResponse(FileResponse):
+    def close(self):
+        super().close()
+        if hasattr(self._file, 'close'):
+            self._file.close()

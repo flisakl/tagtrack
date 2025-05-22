@@ -17,7 +17,8 @@ class Editor:
     async def write_metadata(
         self,
         file: FieldFile,
-        metadata: Dict[str, Any]
+        metadata: Dict[str, Any],
+        song: Song = None
     ) -> None:
         raise NotImplementedError()
 
@@ -163,10 +164,18 @@ class ID3Editor(Editor):
 
     async def write_metadata(
         self,
-        file: FieldFile | TemporaryUploadedFile,
-        metadata: Dict[str, Any]
+        file: FieldFile = None,
+        metadata: Dict[str, Any] = None,
+        song: Song = None
     ) -> None:
         tags = ID3()
+
+        if song:
+            metadata = self.song_to_metadata(song)
+            file = song.file
+        elif file is None and metadata is None:
+            msg = "`file` and `metadata` parameters must be provided"
+            raise ValueError(msg)
 
         # Set basic fields
         if metadata.get('name'):
@@ -237,3 +246,13 @@ async def read_metadata(file: TemporaryUploadedFile) -> dict:
 
         return await editor.read_metadata(f)
     return None
+
+
+async def write_metadata(song: Song) -> dict:
+    file = song.file
+    f = await sync_to_async(File)(file.path)
+    if f:
+        if issubclass(f.__class__, ID3FileType):
+            editor = ID3Editor()
+
+        await editor.write_metadata(song=song)

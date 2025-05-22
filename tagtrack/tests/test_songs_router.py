@@ -3,6 +3,8 @@ from .helper import TestHelper
 from asgiref.sync import sync_to_async
 from django.utils.datastructures import MultiValueDict
 from mutagen import File
+import zipfile
+from io import BytesIO
 
 from tagtrack.routers import songs_router
 from tagtrack.models import Artist, Album, Song
@@ -266,3 +268,22 @@ class TestSongRouter(TestHelper):
         self.assertEqual(1, await Song.objects.acount())
         self.assertEqual(0, await Album.objects.acount())
         self.assertEqual(0, await Artist.objects.acount())
+
+    async def test_songs_can_be_downloaded(self):
+        s1 = await self.create_song(
+            self.temp_file('song.mp3', 'audio/mpeg', 'song1.mp3')
+        )
+        s2 = await self.create_song(
+            self.temp_file('song.mp3', 'audio/mpeg', 'song2.mp3')
+        )
+
+        response = await self.client.get('/download', query_params={'song_ids': [s1.pk, s2.pk]})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers['Content-Type'], 'application/zip')
+        self.assertTrue(response.headers['Content-Disposition'].startswith('attachment'))
+        zip_content = BytesIO(response.content)
+        with zipfile.ZipFile(zip_content) as zf:
+            names = zf.namelist()
+        self.assertIn('song1.mp3', names)
+        self.assertIn('song2.mp3', names)
