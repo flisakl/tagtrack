@@ -51,6 +51,7 @@ class Song(models.Model):
                               on_delete=models.SET_NULL, related_name='songs')
     image = models.ImageField(upload_to='singles', null=True, blank=True,
                               help_text=_('Use only for singles'))
+    retag = models.BooleanField(default=False)
 
     def __str__(self):
         return self.name
