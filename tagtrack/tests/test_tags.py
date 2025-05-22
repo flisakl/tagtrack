@@ -47,10 +47,11 @@ class TestEditors(TestHelper):
         self.assertEqual(art[1]['name'], artists[1].name)
         self.assertEqual(art[2]['name'], artists[2].name)
 
-    def test_metadata_are_read_properly_from_mp3_file(self):
+    async def test_metadata_are_read_properly_from_mp3_file(self):
         f = File(self.temp_file('song.mp3', 'audio/mpeg'))
+        editor = ID3Editor()
 
-        meta = ID3Editor().read_metadata(f)
+        meta = await editor.read_metadata(f)
 
         expected = {'name': 'Why Judy Why', 'year': 1970, 'number': 1}
         self.assertJSONMatchesDict(meta, expected)
@@ -81,9 +82,9 @@ class TestEditors(TestHelper):
         meta = Editor().song_to_metadata(song)
         editor = ID3Editor()
 
-        editor.write_metadata(song.file, meta)
+        await editor.write_metadata(song.file, meta)
 
-        read = editor.read_metadata(File(song.file))
+        read = await editor.read_metadata(File(song.file))
         # Song properties
         self.assertEqual(read['name'], song.name)
         self.assertEqual(read['year'], song.year)

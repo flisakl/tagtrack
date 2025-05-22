@@ -5,15 +5,16 @@ from mutagen import File
 from mutagen.id3 import ID3FileType, PictureType, ID3
 from mutagen.id3 import APIC, TPE1, TPE2, TALB, TIT2, TDRC, TCON, TRCK
 from mutagen._constants import GENRES
+from asgiref.sync import sync_to_async
 from .models import Song
 import mimetypes
 
 
 class Editor:
-    def read_metadata(self, file) -> Dict[str, Any]:
+    async def read_metadata(self, file) -> Dict[str, Any]:
         raise NotImplementedError()
 
-    def write_metadata(
+    async def write_metadata(
         self,
         file: FieldFile,
         metadata: Dict[str, Any]
@@ -82,7 +83,7 @@ class Editor:
 
 
 class ID3Editor(Editor):
-    def read_metadata(self, file: ID3FileType) -> Dict[str, Any]:
+    async def read_metadata(self, file: ID3FileType) -> Dict[str, Any]:
         tags = file.tags
 
         genre = tags.get('TCON').text[0] if tags.get('TCON') else None
@@ -160,7 +161,7 @@ class ID3Editor(Editor):
 
         return metadata
 
-    def write_metadata(
+    async def write_metadata(
         self,
         file: FieldFile | TemporaryUploadedFile,
         metadata: Dict[str, Any]
@@ -195,9 +196,9 @@ class ID3Editor(Editor):
                 tags.add(f)
 
         if isinstance(file, FieldFile):
-            tags.save(file.path)
+            await sync_to_async(tags.save)(file.path)
         else:
-            tags.save(file.temporary_file_path())
+            await sync_to_async(tags.save)(file.temporary_file_path())
 
     def _set_artist_tags(
         self,
@@ -228,11 +229,11 @@ class ID3Editor(Editor):
                     tags.add(f)
 
 
-def read_metadata(file: TemporaryUploadedFile) -> dict:
-    f = File(file.temporary_file_path())
+async def read_metadata(file: TemporaryUploadedFile) -> dict:
+    f = await sync_to_async(File)(file.temporary_file_path())
     if f:
         if issubclass(f.__class__, ID3FileType):
             editor = ID3Editor()
 
-        return editor.read_metadata(f)
+        return await editor.read_metadata(f)
     return None

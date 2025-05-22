@@ -170,7 +170,7 @@ class TestSongRouter(TestHelper):
         ]
         editor = ID3Editor()
         for i, data in enumerate(meta):
-            editor.write_metadata(f[i], data)
+            await editor.write_metadata(f[i], data)
 
         f = MultiValueDict({'files': f})
 

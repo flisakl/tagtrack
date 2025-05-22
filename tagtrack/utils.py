@@ -20,7 +20,7 @@ def make_error(loc: list[str], field_name: str, msg: str):
     }
 
 
-def validate_audio_file(
+async def validate_audio_file(
     audio: TemporaryUploadedFile | None,
     loc: list[str] = ['form'],
     field: str = 'file'
@@ -43,7 +43,7 @@ def validate_audio_file(
             audio.temporary_file_path()
         ]
     try:
-        result = subprocess.run(
+        await sync_to_async(subprocess.run)(
             cmd, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, check=True, text=True)
     except Exception:
@@ -51,7 +51,7 @@ def validate_audio_file(
     return None
 
 
-def validate_image(
+async def validate_image(
     image: TemporaryUploadedFile,
     loc: list[str] = ['form'],
     field: str = 'image'
@@ -67,7 +67,8 @@ def validate_image(
         return ve
 
     try:
-        Image.open(image.temporary_file_path()).verify()
+        im = await sync_to_async(Image.open)(image.temporary_file_path())
+        await sync_to_async(im.verify)()
     except Exception:
         return ve
     return None
@@ -91,16 +92,22 @@ def fill_song_fields(song: Song, album: Album):
     song.year = song.year if song.year else album.year
 
 
-def make_tempfile_from_apic_frame(frame: APIC | None):
+def _make_temp_image(frame: APIC) -> TemporaryUploadedFile:
+    tf = TemporaryUploadedFile(
+        frame.desc, content_type=frame.mime, size=0, charset=frame.encoding
+    )
+    tf.file.write(frame.data)
+    tf.file.seek(0)
+    return tf
+
+
+async def make_tempfile_from_apic_frame(frame: APIC | None):
     if not frame:
         return None
     elif frame.mime == '->':
         return None
 
-    tf = TemporaryUploadedFile(
-        frame.desc, content_type=frame.mime, size=0, charset=frame.encoding
-    )
-    tf.file.write(frame.data)
-    if not validate_image(tf):
+    tf = await sync_to_async(_make_temp_image)(frame)
+    if not await validate_image(tf):
         return tf
     return None

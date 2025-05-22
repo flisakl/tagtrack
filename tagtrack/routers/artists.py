@@ -39,7 +39,7 @@ async def create_artist(
     """
     artist = Artist(**form.dict(exclude_unset=True))
 
-    if err := utils.validate_image(image):
+    if err := await utils.validate_image(image):
         raise err
     artist.image = image
 
@@ -130,7 +130,7 @@ async def update_artist(
     for attr, value in data.items():
         setattr(obj, attr, value)
 
-    if image and not utils.validate_image(image):
+    if image and not await utils.validate_image(image):
         obj.image.delete(save=False)
         obj.image.save(image.name, image, save=False)
 
