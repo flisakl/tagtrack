@@ -27,7 +27,7 @@ class AlbumSchemaIn(ModelSchema):
 
 class SongSchemaIn(ModelSchema):
     album_id: int | None = None
-    artist_ids: str | None = ''
+    artist_ids: list[int] = []
 
     class Meta:
         model = Song

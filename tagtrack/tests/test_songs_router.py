@@ -2,6 +2,7 @@ from ninja.testing import TestAsyncClient
 from .helper import TestHelper
 from asgiref.sync import sync_to_async
 from django.utils.datastructures import MultiValueDict
+from django.http import QueryDict
 from mutagen import File
 import zipfile
 from io import BytesIO
@@ -20,12 +21,14 @@ class TestSongRouter(TestHelper):
         a2 = await self.create_artist(name='Octopus')
         album = await self.create_album(
             name='Squire Tuck Soundtracks for the Soul', artist=artist)
-        data = {
+        data = QueryDict(mutable=True)
+        data.update({
             'name': 'Yearning For Better Days',
             'duration': 166, 'genre': 'Instrumental', 'year': 2018,
             'number': 6, 'album_id': album.pk,
-            'artist_ids': f'{artist.pk},{a2.pk}'
-        }
+        })
+        for x in [artist.pk, a2.pk]:
+            data.appendlist('artist_ids', x)
         files = {
             'image': self.temp_file(),
             'file': self.temp_file('song.mp3', mime='audio/mpeg')}

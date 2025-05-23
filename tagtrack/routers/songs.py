@@ -39,8 +39,7 @@ async def create_song(
     """
     data = form.dict(exclude_unset=True)
     album = data.pop('album_id', None)
-    artist_ids = data.pop('artist_ids', None)
-    artist_ids = [int(x) for x in artist_ids.split(',')] if artist_ids else []
+    artist_ids = data.pop('artist_ids', [])
     song = Song(**data)
 
     if album:
@@ -128,8 +127,7 @@ async def update_song(
     """
     data = form.dict(exclude_unset=True)
     album = data.pop('album_id', None)
-    artist_ids = data.pop('artist_ids', None)
-    artist_ids = [int(x) for x in artist_ids.split(',')] if artist_ids else []
+    artist_ids = data.pop('artist_ids', [])
 
     song = await aget_object_or_404(Song, pk=song_id)
 
