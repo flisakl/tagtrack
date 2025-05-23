@@ -56,12 +56,12 @@ async def create_artist(
     '',
     response=list[ArtistSchemaOut],
     auth=ARTIST_AUTH['READ'],
-    description="Retrieve a paginated list of artists with optional filtering."
+    description="Retrieve a paginated list of artists with optional filtering.",
 )
 @paginate
 async def get_artists(
     request,
-    filters: Query[ArtistFilterSchema]
+    filters: Query[ArtistFilterSchema],
 ):
     """
     Retrieves a paginated list of artists.
@@ -72,8 +72,8 @@ async def get_artists(
     """
     key = f"artists:{urlencode(sorted(request.GET.items()), doseq=True)}"
     qs = filters.filter(Artist.objects.annotate(
-        song_count=Count('songs'),
-        album_count=Count('albums')
+        song_count=Count('songs', distinct=True),
+        album_count=Count('albums', distinct=True)
     ))
     return await utils.get_or_set_from_cache(key, qs)
 
@@ -82,7 +82,8 @@ async def get_artists(
     '/{int:artist_id}',
     response=SingleArtistSchemaOut,
     auth=ARTIST_AUTH['READ'],
-    description="Retrieve details for a specific artist by ID."
+    description="Retrieve details for a specific artist by ID.",
+    exclude_unset=True
 )
 async def get_artist(request, artist_id: int):
     """
@@ -93,10 +94,7 @@ async def get_artist(request, artist_id: int):
     - Caches the response by artist ID.
     """
     key = f"artists:artist_id={artist_id}"
-    qs = Artist.objects.annotate(
-        song_count=Count('songs'),
-        album_count=Count('albums')
-    ).prefetch_related('songs__album', 'albums')
+    qs = Artist.objects.prefetch_related('songs__album', 'albums')
     obj = await utils.get_or_set_from_cache(key, qs, artist_id)
 
     for song in obj.songs.all():
@@ -109,7 +107,7 @@ async def get_artist(request, artist_id: int):
     '/{int:artist_id}',
     response=ArtistSchemaOut,
     auth=ARTIST_AUTH['UPDATE'],
-    description="Update an existing artist by ID, including optional image replacement."
+    description="Update an existing artist by ID, including optional image replacement.",
 )
 async def update_artist(
     request,

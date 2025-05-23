@@ -10,6 +10,7 @@ import subprocess
 from mutagen.id3 import APIC
 import io
 import zipfile
+import mimetypes
 from os import path
 
 from tagtrack.models import Album, Song
@@ -62,12 +63,12 @@ async def validate_image(
 
 ) -> None | ValidationError:
     """Returns ValidationError when image is invalid"""
-    if image is None:
-        return image
-
     err = make_error(loc, field, _('File is not an image'))
     ve = ValidationError([err])
     if "image" not in image.content_type:
+        return ve
+
+    if image is None:
         return ve
 
     try:
@@ -97,12 +98,17 @@ def fill_song_fields(song: Song, album: Album):
 
 
 def _make_temp_image(frame: APIC) -> TemporaryUploadedFile:
-    tf = TemporaryUploadedFile(
-        frame.desc, content_type=frame.mime, size=0, charset=frame.encoding
-    )
-    tf.file.write(frame.data)
-    tf.file.seek(0)
-    return tf
+    name = frame.desc or "temp"
+    ext = mimetypes.guess_extension(frame.mime)
+    if ext:
+        name = f"{name}{ext}"
+        tf = TemporaryUploadedFile(
+            name, content_type=frame.mime, size=0, charset=frame.encoding
+        )
+        tf.file.write(frame.data)
+        tf.file.seek(0)
+        return tf
+    return None
 
 
 async def make_tempfile_from_apic_frame(frame: APIC | None):
