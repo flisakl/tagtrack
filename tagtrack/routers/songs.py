@@ -72,7 +72,8 @@ async def create_song(
     '',
     response=list[SongSchemaOut],
     auth=SONG_AUTH['READ'],
-    description="Retrieve a paginated list of songs with filtering support. Includes related album info."
+    description="Retrieve a paginated list of songs with filtering support. Includes related album info.",
+    exclude_unset=True
 )
 @paginate
 async def get_songs(
@@ -86,14 +87,18 @@ async def get_songs(
     """
     key = f"songs:{urlencode(sorted(request.GET.items()), doseq=True)}"
     qs = filters.filter(Song.objects.select_related('album'))
-    return await utils.get_or_set_from_cache(key, qs)
+    result = await utils.get_or_set_from_cache(key, qs)
+    for song in result:
+        utils.fill_song_fields(song, song.album)
+    return result
 
 
 @router.get(
     '/{int:song_id}',
     response=SingleSongSchemaOut,
     auth=SONG_AUTH['READ'],
-    description="Retrieve a single song by ID. Includes related album and artists."
+    description="Retrieve a single song by ID. Includes related album and artists.",
+    exclude_unset=True
 )
 async def get_song(request, song_id: int):
     """
@@ -102,7 +107,9 @@ async def get_song(request, song_id: int):
     """
     key = f"songs:song_id={song_id}"
     qs = Song.objects.select_related('album').prefetch_related('artists')
-    return await utils.get_or_set_from_cache(key, qs, song_id)
+    song = await utils.get_or_set_from_cache(key, qs, song_id)
+    utils.fill_song_fields(song, song.album)
+    return song
 
 
 @router.patch(
