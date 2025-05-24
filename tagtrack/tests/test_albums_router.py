@@ -58,6 +58,7 @@ class TestRouter(TestHelper):
 
     async def test_albums_can_be_filtered(self):
         albums = await self.create_albums()
+        await self.create_songs(albums)
         params = [
             {'name': 'master'},
             {'artist_id': albums[0].artist.pk, 'name': 'cold'},
@@ -82,8 +83,8 @@ class TestRouter(TestHelper):
         self.assertEqual(json[4]['count'], 3)
 
     async def test_album_can_be_fetched(self):
-        art = await self.create_artist()
-        alb = await self.create_album(art)
+        songs = await self.create_songs()
+        alb = songs[0].album
 
         res = await self.client.get(f"/{alb.pk}")
         json = res.json()
@@ -95,13 +96,15 @@ class TestRouter(TestHelper):
             'artist': {
                 'id': 1,
                 'image': None,
-                'name': art.name,
+                'name': alb.artist.name,
                 'song_count': None,
                 'album_count': None,
             }
         }
         self.assertEqual(res.status_code, 200)
         self.assertJSONMatchesDict(json, expected)
+        self.assertEqual(len(json['songs']), 1)
+        self.assertEqual(json['songs'][0]['name'], songs[0].name)
 
     async def test_album_can_be_updated(self):
         art = await self.create_artist('Rammstein')

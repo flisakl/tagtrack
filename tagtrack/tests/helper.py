@@ -130,7 +130,22 @@ class TestHelper(TestCase):
         for x in data:
             x['file'] = self.temp_file('song.mp3', 'audio/mpeg')
         objs = [Song(**d) for d in data]
-        return await Song.objects.abulk_create(objs)
+        ret = await Song.objects.abulk_create(objs)
+        SongArtist = Song.artists.through
+        data = [
+            {'artist_id': 1, 'song_id': 1},
+            {'artist_id': 4, 'song_id': 2},
+            {'artist_id': 4, 'song_id': 3},
+            {'artist_id': 1, 'song_id': 4},
+            {'artist_id': 5, 'song_id': 5},
+            {'artist_id': 5, 'song_id': 6},
+            {'artist_id': 5, 'song_id': 7},
+            {'artist_id': 2, 'song_id': 8},
+            {'artist_id': 2, 'song_id': 9},
+            {'artist_id': 3, 'song_id': 10},
+        ]
+        await SongArtist.objects.abulk_create([SongArtist(**d) for d in data])
+        return ret
 
     def assertJSONMatchesDict(self, json: dict, data: dict):
         for key, value in data.items():

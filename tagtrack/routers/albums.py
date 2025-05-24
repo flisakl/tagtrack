@@ -91,7 +91,7 @@ async def get_album(request, album_id: int):
     qs = Album.objects.annotate(
         song_count=Count('songs'),
         total_duration=Sum('songs__duration') / 60
-    ).select_related('artist').prefetch_related('songs')
+    ).select_related('artist').prefetch_related('songs__artists')
     obj = await utils.get_or_set_from_cache(key, qs, album_id)
 
     for song in obj.songs.all():

@@ -34,7 +34,7 @@ class TestArtistRouter(TestHelper):
         self.assertIn('name', json['detail'][0]['loc'])
 
     async def test_artists_can_be_filtered(self):
-        await self.create_albums()
+        await self.create_songs()
         params = [
             {'name': 'pearl'},
             {'album_count': 3}
@@ -50,17 +50,20 @@ class TestArtistRouter(TestHelper):
         self.assertEqual(json[1]['items'][0]['name'], 'Ghost')
 
     async def test_artist_can_be_fetched(self):
-        albums = await self.create_albums()
-        obj = albums[0].artist
+        await self.create_songs()
 
-        res = await self.client.get(f"/{obj.pk}")
+        res = await self.client.get("/4")
         json = res.json()
 
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(json['name'], obj.name)
-        self.assertEqual(len(json['albums']), 2)
-        self.assertEqual(json['albums'][0]['name'], albums[0].name)
-        self.assertEqual(json['albums'][1]['name'], albums[1].name)
+        self.assertEqual(json['name'], "Ghost")
+        self.assertEqual(len(json['albums']), 3)
+        self.assertEqual(json['albums'][0]['name'], "Impera")
+        self.assertEqual(json['albums'][1]['name'], "Meliora")
+        self.assertEqual(json['albums'][2]['name'], "Opus Eponymous")
+        self.assertEqual(len(json['songs']), 2)
+        self.assertEqual(json['songs'][0]['name'], "Spirit")
+        self.assertEqual(json['songs'][1]['name'], "He Is")
 
     async def test_artist_can_be_updated(self):
         f = self.temp_file(upload_filename='old.jpg')

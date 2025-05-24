@@ -1,6 +1,6 @@
 from ninja import Router, Form, File, UploadedFile, Query
 from django.core.cache import cache
-from django.db.models import Count
+from django.db.models import Count, Prefetch
 from django.db import IntegrityError
 from django.utils.translation import gettext_lazy as _
 from django.shortcuts import aget_object_or_404
@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 
 from tagtrack import ARTIST_AUTH
 from tagtrack import utils
-from tagtrack.models import Artist
+from tagtrack.models import Artist, Song
 from .schemas import (
     ArtistSchemaIn, ArtistSchemaOut, ArtistFilterSchema, SingleArtistSchemaOut
 )
@@ -85,7 +85,12 @@ async def get_artists(
     description="Retrieve details for a specific artist by ID.",
     exclude_unset=True
 )
-async def get_artist(request, artist_id: int):
+async def get_artist(
+    request,
+    artist_id: int,
+    song_limit: Query[int] = 20,
+    song_offset: Query[int] = 0,
+):
     """
     Retrieves detailed information about a specific artist.
 
@@ -94,13 +99,23 @@ async def get_artist(request, artist_id: int):
     - Caches the response by artist ID.
     """
     key = f"artists:artist_id={artist_id}"
-    qs = Artist.objects.prefetch_related('songs__album', 'albums')
+    song_limit = min(100, song_limit)
+    song_offset = max(0, song_offset)
+    qs = Artist.objects.prefetch_related(
+        Prefetch(
+            'songs',
+            Song.objects.prefetch_related('artists').select_related(
+                'album')[song_offset:song_offset + song_limit],
+            to_attr='songs_sliced'
+        ),
+        'albums'
+    )
     obj = await utils.get_or_set_from_cache(key, qs, artist_id)
 
-    for song in obj.songs.all():
+    for song in obj.songs_sliced:
         if song.album:
             utils.fill_song_fields(song, song.album)
-    return obj
+        return obj
 
 
 @router.patch(

@@ -86,7 +86,7 @@ async def get_songs(
     Results are cached per querystring.
     """
     key = f"songs:{urlencode(sorted(request.GET.items()), doseq=True)}"
-    qs = filters.filter(Song.objects.select_related('album'))
+    qs = filters.filter(Song.objects.select_related('album').prefetch_related('artists'))
     result = await utils.get_or_set_from_cache(key, qs)
     for song in result:
         utils.fill_song_fields(song, song.album)

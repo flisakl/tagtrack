@@ -43,15 +43,6 @@ class AlbumSchemaOut(ModelSchema):
         fields = ['id', 'name', 'image', 'genre', 'year']
 
 
-class SongSchemaOut(ModelSchema):
-    album: AlbumSchemaOut | None = None
-
-    class Meta:
-        model = Song
-        fields = ['id', 'name', 'duration', 'genre', 'year', 'image', 'file',
-                  'number']
-
-
 class ArtistSchemaOut(ModelSchema):
     song_count: int | None = None
     album_count: int | None = None
@@ -59,6 +50,16 @@ class ArtistSchemaOut(ModelSchema):
     class Meta:
         model = Artist
         fields = ['id', 'name', 'image']
+
+
+class SongSchemaOut(ModelSchema):
+    album: AlbumSchemaOut | None = None
+    artists: list[ArtistSchemaOut] = None
+
+    class Meta:
+        model = Song
+        fields = ['id', 'name', 'duration', 'genre', 'year', 'image', 'file',
+                  'number']
 
 
 class ArtistFilterSchema(FilterSchema):
@@ -96,7 +97,7 @@ class SongFilterSchema(FilterSchema):
 
 
 class SingleArtistSchemaOut(ModelSchema):
-    songs: list[SongSchemaOut] = []
+    songs: list[SongSchemaOut] = Field([], alias='songs_sliced')
     albums: list[AlbumSchemaOut] = []
 
     class Meta:
