@@ -1,6 +1,7 @@
 from ninja import Router, Form, File, UploadedFile, Query
+from ninja.pagination import LimitOffsetPagination
 from django.core.cache import cache
-from django.db.models import Count, Prefetch
+from django.db.models import Count, QuerySet
 from django.db import IntegrityError
 from django.utils.translation import gettext_lazy as _
 from django.shortcuts import aget_object_or_404
@@ -13,10 +14,53 @@ from tagtrack import ARTIST_AUTH
 from tagtrack import utils
 from tagtrack.models import Artist, Song
 from .schemas import (
-    ArtistSchemaIn, ArtistSchemaOut, ArtistFilterSchema, SingleArtistSchemaOut
+    ArtistSchemaIn, ArtistSchemaOut, ArtistFilterSchema, SingleArtistSchemaOut,
+    SongSchemaOut
 )
 
 router = Router(tags=["Artists"])
+
+
+class CustomLimitPagination(LimitOffsetPagination):
+    def __init__(
+        self,
+        limit: int = None,
+        offset: int = None,
+        **kwargs: any,
+    ) -> None:
+        self.limit = limit
+        self.offset = offset
+        super().__init__(**kwargs)
+
+    def paginate_queryset(
+        self,
+        queryset: any,
+        pagination: any,
+        **params: any,
+    ) -> any:
+        offset = self.offset or pagination.offset
+        limit: int = min(self.limit or pagination.limit, 100)
+        return {
+            "items": queryset[offset : offset + limit],
+            "count": self._items_count(queryset),
+        }
+
+    async def apaginate_queryset(
+        self,
+        queryset: any,
+        pagination: any,
+        **params: any,
+    ) -> any:
+        offset = self.offset or pagination.offset
+        limit: int = min(self.limit or pagination.limit, 100)
+        if isinstance(queryset, QuerySet):
+            items = [obj async for obj in queryset[offset : offset + limit]]
+        else:
+            items = queryset[offset : offset + limit]
+        return {
+            "items": items,
+            "count": await self._aitems_count(queryset),
+        }
 
 
 @router.post(
@@ -88,34 +132,45 @@ async def get_artists(
 async def get_artist(
     request,
     artist_id: int,
-    song_limit: Query[int] = 20,
-    song_offset: Query[int] = 0,
 ):
     """
     Retrieves detailed information about a specific artist.
 
     - Annotates artist with song and album counts.
-    - Prefetches songs and related albums.
+    - Prefetches related albums.
     - Caches the response by artist ID.
     """
     key = f"artists:artist_id={artist_id}"
-    song_limit = min(100, song_limit)
-    song_offset = max(0, song_offset)
-    qs = Artist.objects.prefetch_related(
-        Prefetch(
-            'songs',
-            Song.objects.prefetch_related('artists').select_related(
-                'album')[song_offset:song_offset + song_limit],
-            to_attr='songs_sliced'
-        ),
-        'albums'
+    qs = Artist.objects.prefetch_related('albums').annotate(
+        song_count=Count('songs', distinct=True),
+        album_count=Count('albums', distinct=True)
     )
     obj = await utils.get_or_set_from_cache(key, qs, artist_id)
+    return obj
 
-    for song in obj.songs_sliced:
-        if song.album:
-            utils.fill_song_fields(song, song.album)
-        return obj
+
+@router.get(
+    '/{int:artist_id}/songs',
+    response=list[SongSchemaOut],
+    auth=ARTIST_AUTH['READ'],
+    description="Retrieve songs from artist with given ID.",
+    exclude_unset=True
+)
+@paginate(CustomLimitPagination, limit=20)
+async def get_artist_songs(
+    request,
+    artist_id: int,
+):
+    """
+    Retrieves songs made by artist with given ID.
+    - Prefetches album and artists for each song.
+    - Caches the response by artist ID.
+    """
+    key = f"artists-songs:artist_id={artist_id}"
+    qs = Song.objects.select_related('album').prefetch_related(
+        'artists').filter(artists__id__in=[artist_id])
+    objs = await utils.get_or_set_from_cache(key, qs)
+    return objs
 
 
 @router.patch(

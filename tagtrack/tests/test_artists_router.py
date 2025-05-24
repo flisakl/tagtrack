@@ -43,11 +43,22 @@ class TestArtistRouter(TestHelper):
         res = [await self.client.get('', query_params=x) for x in params]
         json = [r.json() for r in res]
 
+        # JSON should contain:
+        # * total number of items matching query
+        # * items list
+        # * each item inside list should contain:
+        #   *  artist's id, name and optional image
+        #   *  total number of artist's songs and albums
+
         self.assertTrue(all([r.status_code == 200 for r in res]))
         self.assertEqual(json[0]['count'], 1)
         self.assertEqual(json[0]['items'][0]['name'], 'Pearl Jam')
+        self.assertEqual(json[0]['items'][0]['album_count'], 2)
+        self.assertEqual(json[0]['items'][0]['song_count'], 1)
         self.assertEqual(json[1]['count'], 1)
         self.assertEqual(json[1]['items'][0]['name'], 'Ghost')
+        self.assertEqual(json[1]['items'][0]['album_count'], 3)
+        self.assertEqual(json[1]['items'][0]['song_count'], 2)
 
     async def test_artist_can_be_fetched(self):
         await self.create_songs()
@@ -55,15 +66,34 @@ class TestArtistRouter(TestHelper):
         res = await self.client.get("/4")
         json = res.json()
 
+        # JSON should contain:
+        # *  artist's id, name and optional image
+        # *  total number of artist's songs and albums
+        # *  list of albums
+        expected = {'name': 'Ghost', 'album_count': 3, 'song_count': 2}
+        expected_albums = set(['Impera', 'Meliora', 'Opus Eponymous'])
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(json['name'], "Ghost")
-        self.assertEqual(len(json['albums']), 3)
-        self.assertEqual(json['albums'][0]['name'], "Impera")
-        self.assertEqual(json['albums'][1]['name'], "Meliora")
-        self.assertEqual(json['albums'][2]['name'], "Opus Eponymous")
-        self.assertEqual(len(json['songs']), 2)
-        self.assertEqual(json['songs'][0]['name'], "Spirit")
-        self.assertEqual(json['songs'][1]['name'], "He Is")
+        self.assertJSONMatchesDict(json, expected)
+        self.assertEqual(set([x['name'] for x in json['albums']]), expected_albums)
+
+    async def test_artist_songs_can_be_fetched(self):
+        await self.create_songs()
+
+        res = await self.client.get("/4/songs")
+        json = res.json()
+
+        # JSON should contain:
+        # *  total number of songs
+        # *  list of songs with artists and albums attached
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(json['count'], 2)
+        items = json['items']
+        self.assertEqual(items[0]['name'], 'Spirit')
+        self.assertTrue(len(items[0]['artists']), 1)
+        self.assertTrue(items[0]['album']['name'], 'Impera')
+        self.assertEqual(items[1]['name'], 'He Is')
+        self.assertTrue(len(items[1]['artists']), 1)
+        self.assertTrue(items[1]['album']['name'], 'Impera')
 
     async def test_artist_can_be_updated(self):
         f = self.temp_file(upload_filename='old.jpg')

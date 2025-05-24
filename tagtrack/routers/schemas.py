@@ -97,8 +97,9 @@ class SongFilterSchema(FilterSchema):
 
 
 class SingleArtistSchemaOut(ModelSchema):
-    songs: list[SongSchemaOut] = Field([], alias='songs_sliced')
     albums: list[AlbumSchemaOut] = []
+    song_count: int | None = None
+    album_count: int | None = None
 
     class Meta:
         model = Artist
