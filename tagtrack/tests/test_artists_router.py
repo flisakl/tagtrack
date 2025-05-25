@@ -43,22 +43,31 @@ class TestArtistRouter(TestHelper):
         res = [await self.client.get('', query_params=x) for x in params]
         json = [r.json() for r in res]
 
-        # JSON should contain:
-        # * total number of items matching query
-        # * items list
-        # * each item inside list should contain:
-        #   *  artist's id, name and optional image
-        #   *  total number of artist's songs and albums
-
+        expected_first = {
+            'count': 1,
+            'items': [
+                {
+                    'id': 3,
+                    'name': 'Pearl Jam',
+                    'song_count': 1,
+                    'album_count': 2
+                }
+            ]
+        }
+        expected_second = {
+            'count': 1,
+            'items': [
+                {
+                    'id': 4,
+                    'name': 'Ghost',
+                    'song_count': 2,
+                    'album_count': 3
+                }
+            ]
+        }
         self.assertTrue(all([r.status_code == 200 for r in res]))
-        self.assertEqual(json[0]['count'], 1)
-        self.assertEqual(json[0]['items'][0]['name'], 'Pearl Jam')
-        self.assertEqual(json[0]['items'][0]['album_count'], 2)
-        self.assertEqual(json[0]['items'][0]['song_count'], 1)
-        self.assertEqual(json[1]['count'], 1)
-        self.assertEqual(json[1]['items'][0]['name'], 'Ghost')
-        self.assertEqual(json[1]['items'][0]['album_count'], 3)
-        self.assertEqual(json[1]['items'][0]['song_count'], 2)
+        self.assertJSONMatchesDict(json[0], expected_first)
+        self.assertJSONMatchesDict(json[1], expected_second)
 
     async def test_artist_can_be_fetched(self):
         await self.create_songs()
@@ -66,15 +75,16 @@ class TestArtistRouter(TestHelper):
         res = await self.client.get("/4")
         json = res.json()
 
-        # JSON should contain:
-        # *  artist's id, name and optional image
-        # *  total number of artist's songs and albums
-        # *  list of albums
-        expected = {'name': 'Ghost', 'album_count': 3, 'song_count': 2}
-        expected_albums = set(['Impera', 'Meliora', 'Opus Eponymous'])
+        expected = {
+            'name': 'Ghost', 'album_count': 3, 'song_count': 2,
+            'albums': [
+                {'id': 6, 'name': 'Impera', 'genre': 'Pop rock', 'year': 2022},
+                {'id': 7, 'name': 'Meliora', 'genre': 'Pop rock', 'year': 2015},
+                {'id': 8, 'name': 'Opus Eponymous', 'genre': 'Pop rock', 'year': 2010},
+            ]
+        }
         self.assertEqual(res.status_code, 200)
         self.assertJSONMatchesDict(json, expected)
-        self.assertEqual(set([x['name'] for x in json['albums']]), expected_albums)
 
     async def test_artist_songs_can_be_fetched(self):
         await self.create_songs()

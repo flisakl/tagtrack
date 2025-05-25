@@ -101,6 +101,8 @@ async def create_artist(
     response=list[ArtistSchemaOut],
     auth=ARTIST_AUTH['READ'],
     description="Retrieve a paginated list of artists with optional filtering.",
+    exclude_unset=True,
+    exclude_none=True
 )
 @paginate
 async def get_artists(
@@ -127,7 +129,8 @@ async def get_artists(
     response=SingleArtistSchemaOut,
     auth=ARTIST_AUTH['READ'],
     description="Retrieve details for a specific artist by ID.",
-    exclude_unset=True
+    exclude_unset=True,
+    exclude_none=True
 )
 async def get_artist(
     request,
