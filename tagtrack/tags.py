@@ -5,8 +5,10 @@ from mutagen import File
 from mutagen.id3 import ID3FileType, PictureType, ID3
 from mutagen.id3 import APIC, TPE1, TPE2, TALB, TIT2, TDRC, TCON, TRCK
 from mutagen._constants import GENRES
+from mutagen.mp4 import MP4, MP4Cover
 from asgiref.sync import sync_to_async
 from .models import Song
+from os import path
 import mimetypes
 
 
@@ -236,6 +238,91 @@ class ID3Editor(Editor):
                     album['image'], album['name'], PictureType.COVER_FRONT
                 ):
                     tags.add(f)
+
+
+class MP4Editor(Editor):
+    async def read_metadata(self, file: MP4) -> Dict[str, Any]:
+        tags = file.tags
+
+        def get_tag(key, default=None):
+            return tags.get(key, [default])[0]
+
+        metadata = {
+            "name": get_tag("\xa9nam"),
+            "year": int(get_tag("\xa9day", "")[:4]) if get_tag("\xa9day") else None,
+            "genre": get_tag("\xa9gen"),
+            "number": get_tag("trkn", [(1,)])[0],
+            "artists": [{"name": name} for name in tags.get("\xa9ART", [])],
+            "duration": int(file.info.length)
+        }
+
+        if album_name := get_tag("\xa9alb"):
+            metadata["album"] = {
+                "name": album_name,
+                "year": int(get_tag("\xa9day", "")[:4]) if get_tag("\xa9day") else None,
+                "genre": get_tag("\xa9gen"),
+                "image": tags.get("covr", [None])[0]
+            }
+            artist = get_tag("aART")
+            if artist:
+                metadata["album"]["artist"] = {
+                    "name": artist
+                }
+        else:
+            metadata["image"] = tags.get("covr", [None])[0]
+
+        return metadata
+
+    async def write_metadata(
+        self,
+        file: FieldFile = None,
+        metadata: Dict[str, Any] = None,
+        song: Song = None
+    ) -> None:
+        if song:
+            metadata = self.song_to_metadata(song)
+            file = song.file
+        elif file is None or metadata is None:
+            raise ValueError("`file` and `metadata` must be provided")
+
+        mp4 = MP4(file.path)
+
+        if name := metadata.get("name"):
+            mp4["\xa9nam"] = [name]
+        if year := metadata.get("year"):
+            mp4["\xa9day"] = [str(year)]
+        if genre := metadata.get("genre"):
+            mp4["\xa9gen"] = [genre]
+        if number := metadata.get("number"):
+            mp4["trkn"] = [(number, 0)]
+
+        if artists := metadata.get("artists"):
+            mp4["\xa9ART"] = [a["name"] for a in artists]
+
+        if album := metadata.get("album"):
+            if album_name := album.get("name"):
+                mp4["\xa9alb"] = [album_name]
+            if album_artist := album.get("artist"):
+                mp4["aART"] = [album_artist]
+            if album_image := album.get("image"):
+                await sync_to_async(self._store_image)(album_image, mp4)
+        elif image := metadata.get("image"):
+            await sync_to_async(self._store_image)(image, mp4)
+
+        await sync_to_async(mp4.save)()
+
+    def _store_image(self, image_field: FieldFile, tags: MP4):
+        ext = path.splitext(image_field.path)
+        if ext == ".png":
+            format = MP4Cover.FORMAT_PNG
+        elif ext == ".jpg":
+            format = MP4Cover.FORMAT_JPEG
+        else:
+            return
+
+        image_field.open("rb")
+        tags["covr"] = [MP4Cover(image_field.read(), imageformat=format)]
+        image_field.close()
 
 
 async def read_metadata(file: TemporaryUploadedFile) -> dict:

@@ -14,7 +14,7 @@ output_dir = Path("test_files")
 output_dir.mkdir(exist_ok=True)
 image_path = output_dir / "image.jpg"
 wav_path = output_dir / "song.wav"
-audio_formats = ["mp3", "flac", "opus", "ogg"]
+audio_formats = ["mp3", "flac", "opus", "ogg", "mp4"]
 
 metadata = {
     "title": "Why Judy Why",
@@ -67,6 +67,7 @@ def convert_audio(wav_path: Path, format: str, output_dir: Path) -> Path:
         "flac": "flac",
         "opus": "libopus",
         "ogg": "libvorbis",  # 🔥 THIS IS IMPORTANT
+        "mp4": "aac"
     }
 
     codec = codec_map.get(format)
@@ -177,7 +178,7 @@ def embed_metadata(filepath, format, metadata):
         audio.save()
         # OggVorbis does not support embedded images via Mutagen
 
-    elif format == "m4a":
+    elif format == "mp4":
         audio = MP4(filepath)
         audio["\xa9nam"] = title
         audio["\xa9alb"] = album_name
@@ -185,7 +186,7 @@ def embed_metadata(filepath, format, metadata):
         audio["\xa9gen"] = genre
         audio["trkn"] = [(int(track), 0)]
         audio["\xa9ART"] = artist_names
-        audio["aART"] = artist_names
+        audio["aART"] = album.get('artist')
 
         # Embed album cover only (MP4 supports only one cover image)
         audio["covr"] = [MP4Cover(cover_data, imageformat=MP4Cover.FORMAT_JPEG)]
