@@ -73,7 +73,8 @@ async def create_song(
     response=list[SongSchemaOut],
     auth=SONG_AUTH['READ'],
     description="Retrieve a paginated list of songs with filtering support. Includes related album info.",
-    exclude_unset=True
+    exclude_unset=True,
+    exclude_none=True
 )
 @paginate
 async def get_songs(
@@ -98,7 +99,8 @@ async def get_songs(
     response=SingleSongSchemaOut,
     auth=SONG_AUTH['READ'],
     description="Retrieve a single song by ID. Includes related album and artists.",
-    exclude_unset=True
+    exclude_unset=True,
+    exclude_none=True
 )
 async def get_song(request, song_id: int):
     """

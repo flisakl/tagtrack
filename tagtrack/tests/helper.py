@@ -127,8 +127,8 @@ class TestHelper(TestCase):
             {'album': a[2], 'name': 'Akegata', 'year': 2019, 'genre': 'J-pop', 'duration': 197},
             {'album': a[3], 'name': 'Sometimes', 'year': 1996, 'genre': 'Alt Rock', 'duration': 161}
         ]
-        for x in data:
-            x['file'] = self.temp_file('song.mp3', 'audio/mpeg')
+        for idx, x in enumerate(data):
+            x['file'] = self.temp_file('song.mp3', 'audio/mpeg', f'song_{idx}.mp3')
         objs = [Song(**d) for d in data]
         ret = await Song.objects.abulk_create(objs)
         SongArtist = Song.artists.through

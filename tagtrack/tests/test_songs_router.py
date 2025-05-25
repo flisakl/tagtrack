@@ -54,22 +54,42 @@ class TestSongRouter(TestHelper):
             {'year_min': 1970, 'year_max': 1980},
             {'duration_max': 200},
             {'album_id': albums[8].pk},
-            {'album_name': albums[1].name},
+            {'album_name': 'piano'},
         ]
 
         r = [await self.client.get('', query_params=rd) for rd in rdata]
         j = [x.json() for x in r]
 
+        expected = {
+            'count': 1,
+            'items': [{
+                'id': 4,
+                'file': '/songs/song_3.mp3',
+                'number': 1,
+                'name': 'Piano Man',
+                'genre': 'Soft Rock',
+                'duration': 250,
+                'year': 1973,
+                'artists': [
+                    {'id': 1, 'name': 'Billy Joel'}
+                ],
+                'album': {
+                    'id': 2,
+                    'name': 'Piano Man',
+                    'year': 1973,
+                    'genre': 'Soft Rock',
+                }
+            }]
+        }
         self.assertTrue(all([x.status_code == 200 for x in r]))
         self.assertEqual(j[0]['count'], 5)
         self.assertEqual(j[1]['count'], 1)
         self.assertEqual(j[2]['count'], 2)
         self.assertEqual(j[3]['count'], 3)
-        self.assertEqual(j[4]['count'], 3)
-        self.assertEqual(j[5]['count'], 1)
+        self.assertJSONMatchesDict(j[5], expected)
 
     async def test_song_can_be_fetched(self):
-        f = self.temp_file('song.mp3', 'audio/mpeg')
+        f = self.temp_file('song.mp3', 'audio/mpeg', 'song_0.mp3')
         art = await self.create_artist(name='Rammstein')
         alb = await self.create_album(name='Rosenrot', artist=art)
         obj = await self.create_song(f, album=alb, artists=[art])
@@ -77,10 +97,26 @@ class TestSongRouter(TestHelper):
         res = await self.client.get(f"/{obj.pk}")
         json = res.json()
 
+        expected = {
+            'id': obj.pk,
+            'file': '/songs/song_0.mp3',
+            'number': obj.number,
+            'name': obj.name,
+            'genre': obj.genre,
+            'duration': obj.duration,
+            'year': obj.year,
+            'artists': [
+                {'id': art.pk, 'name': art.name}
+            ],
+            'album': {
+                'id': alb.pk,
+                'name': alb.name,
+                'year': alb.year,
+                'genre': alb.genre,
+            }
+        }
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(json['name'], obj.name)
-        self.assertEqual(json['album']['name'], alb.name)
-        self.assertEqual(json['artists'][0]['name'], art.name)
+        self.assertJSONMatchesDict(json, expected)
 
     async def test_song_can_be_updated(self):
         artist = await self.create_artist(name='Squire Tuck')

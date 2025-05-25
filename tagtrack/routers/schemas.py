@@ -133,7 +133,7 @@ class SingleSongSchemaOut(ModelSchema):
 
     class Meta:
         model = Song
-        fields = ['name', 'duration', 'genre', 'year', 'image', 'file',
+        fields = ['id', 'name', 'duration', 'genre', 'year', 'image', 'file',
                   'number']
 
 

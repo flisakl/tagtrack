@@ -117,7 +117,7 @@ class TestRouter(TestHelper):
                     'year': 1970,
                     'number': 1,
                     'duration': 350,
-                    'file': '/songs/song.mp3',
+                    'file': '/songs/song_0.mp3',
                     'artists': [
                         {'id': 1, 'name': alb.artist.name}
                     ],
