@@ -52,6 +52,16 @@ class ArtistSchemaOut(ModelSchema):
         fields = ['id', 'name', 'image']
 
 
+class AlbumWithArtistSchemaOut(ModelSchema):
+    song_count: int | None = None
+    total_duration: int | None = None
+    artist: ArtistSchemaOut = None
+
+    class Meta:
+        model = Album
+        fields = ['id', 'name', 'image', 'genre', 'year']
+
+
 class SongSchemaOut(ModelSchema):
     album: AlbumSchemaOut | None = None
     artists: list[ArtistSchemaOut] = None

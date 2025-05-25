@@ -70,9 +70,20 @@ class TestRouter(TestHelper):
         res = [await self.client.get('', query_params=x) for x in params]
         json = [x.json() for x in res]
 
+        item_expected = {
+            'name': 'Master of Puppets',
+            'year': 1986,
+            'genre': 'Metal',
+            'artist': {
+                'id': 5,
+                'name': 'Metallica'
+            },
+            'song_count': 3,
+            'total_duration': 22
+        }
         self.assertTrue(all([r.status_code == 200 for r in res]))
         self.assertEqual(json[0]['count'], 1)
-        self.assertEqual(json[0]['items'][0]['name'], 'Master of Puppets')
+        self.assertJSONMatchesDict(json[0]['items'][0], item_expected)
         self.assertEqual(json[1]['count'], 1)
         self.assertEqual(json[1]['items'][0]['name'], 'Cold Spring Harbor')
         self.assertEqual(json[2]['count'], 3)
@@ -89,22 +100,35 @@ class TestRouter(TestHelper):
         res = await self.client.get(f"/{alb.pk}")
         json = res.json()
 
-        expected = {
-            'name': alb.name,
+        album = {
+            'id': 1,
             'genre': alb.genre,
             'year': alb.year,
-            'artist': {
-                'id': 1,
-                'image': None,
-                'name': alb.artist.name,
-                'song_count': None,
-                'album_count': None,
-            }
+            'name': alb.name,
+            'song_count': 1,
+            'total_duration': 5
+        }
+        expected = album | {
+            'songs': [
+                {
+                    'id': 1,
+                    'name': 'Why Judy Why',
+                    'genre': 'Rock',
+                    'year': 1970,
+                    'number': 1,
+                    'duration': 350,
+                    'file': '/songs/song.mp3',
+                    'artists': [
+                        {'id': 1, 'name': alb.artist.name}
+                    ],
+                    'album': album
+                }
+            ],
+            'song_count': 1,
+            'total_duration': 5
         }
         self.assertEqual(res.status_code, 200)
         self.assertJSONMatchesDict(json, expected)
-        self.assertEqual(len(json['songs']), 1)
-        self.assertEqual(json['songs'][0]['name'], songs[0].name)
 
     async def test_album_can_be_updated(self):
         art = await self.create_artist('Rammstein')
@@ -179,7 +203,8 @@ class TestRouter(TestHelper):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers['Content-Type'], 'application/zip')
-        self.assertTrue(response.headers['Content-Disposition'].startswith('attachment'))
+        self.assertTrue(
+            response.headers['Content-Disposition'].startswith('attachment'))
         zip_content = BytesIO(response.content)
         with zipfile.ZipFile(zip_content) as zf:
             names = zf.namelist()

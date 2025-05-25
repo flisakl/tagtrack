@@ -13,7 +13,8 @@ from tagtrack import ALBUM_AUTH
 from tagtrack import utils, tags
 from tagtrack.models import Album, Artist, Song
 from .schemas import (
-    AlbumSchemaIn, AlbumSchemaOut, AlbumFilterSchema, SingleAlbumSchemaOut
+    AlbumSchemaIn, AlbumSchemaOut, AlbumFilterSchema, SingleAlbumSchemaOut,
+    AlbumWithArtistSchemaOut
 )
 
 router = Router(tags=["Albums"])
@@ -54,9 +55,11 @@ async def create_album(
 
 @router.get(
     '',
-    response=list[AlbumSchemaOut],
+    response=list[AlbumWithArtistSchemaOut],
     auth=ALBUM_AUTH['READ'],
-    description="List albums with filtering and pagination. Includes song count and total duration in minutes."
+    description="List albums with filtering and pagination. Includes song count and total duration in minutes.",
+    exclude_unset=True,
+    exclude_none=True
 )
 @paginate
 async def get_albums(
@@ -69,10 +72,10 @@ async def get_albums(
     Results are cached based on the querystring.
     """
     key = f"albums:{urlencode(sorted(request.GET.items()), doseq=True)}"
-    qs = filters.filter(Album.objects.annotate(
+    qs = Album.objects.annotate(
         song_count=Count('songs'),
-        total_duration=Sum('songs__duration') / 60
-    ))
+        total_duration=Sum('songs__duration') / 60).select_related('artist')
+    qs = filters.filter(qs)
     return await utils.get_or_set_from_cache(key, qs)
 
 
@@ -80,7 +83,9 @@ async def get_albums(
     '/{int:album_id}',
     response=SingleAlbumSchemaOut,
     auth=ALBUM_AUTH['READ'],
-    description="Retrieve a single album by ID, including related songs and artist."
+    description="Retrieve a single album by ID, including related songs and artist.",
+    exclude_unset=True,
+    exclude_none=True
 )
 async def get_album(request, album_id: int):
     """
