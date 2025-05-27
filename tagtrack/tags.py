@@ -260,91 +260,139 @@ class ID3Editor(Editor):
                     self.tags.add(f)
 
 
-# class MP4Editor(Editor):
-#     async def read_metadata(self, file: MP4) -> Dict[str, Any]:
-#         tags = file.tags
-#
-#         def get_tag(key, default=None):
-#             return tags.get(key, [default])[0]
-#
-#         metadata = {
-#             "name": get_tag("\xa9nam"),
-#             "year": int(get_tag("\xa9day", "")[:4]) if get_tag("\xa9day") else None,
-#             "genre": get_tag("\xa9gen"),
-#             "number": get_tag("trkn", [(1,)])[0],
-#             "artists": [{"name": name} for name in tags.get("\xa9ART", [])],
-#             "duration": int(file.info.length)
-#         }
-#
-#         if album_name := get_tag("\xa9alb"):
-#             metadata["album"] = {
-#                 "name": album_name,
-#                 "year": int(get_tag("\xa9day", "")[:4]) if get_tag("\xa9day") else None,
-#                 "genre": get_tag("\xa9gen"),
-#                 "image": tags.get("covr", [None])[0]
-#             }
-#             artist = get_tag("aART")
-#             if artist:
-#                 metadata["album"]["artist"] = {
-#                     "name": artist
-#                 }
-#         else:
-#             metadata["image"] = tags.get("covr", [None])[0]
-#
-#         return metadata
-#
-#     async def write_metadata(
-#         self,
-#         file: FieldFile = None,
-#         metadata: Dict[str, Any] = None,
-#         song: Song = None
-#     ) -> None:
-#         if song:
-#             metadata = self.song_to_metadata(song)
-#             file = song.file
-#         elif file is None or metadata is None:
-#             raise ValueError("`file` and `metadata` must be provided")
-#
-#         mp4 = MP4(file.path)
-#
-#         if name := metadata.get("name"):
-#             mp4["\xa9nam"] = [name]
-#         if year := metadata.get("year"):
-#             mp4["\xa9day"] = [str(year)]
-#         if genre := metadata.get("genre"):
-#             mp4["\xa9gen"] = [genre]
-#         if number := metadata.get("number"):
-#             mp4["trkn"] = [(number, 0)]
-#
-#         if artists := metadata.get("artists"):
-#             mp4["\xa9ART"] = [a["name"] for a in artists]
-#
-#         if album := metadata.get("album"):
-#             if album_name := album.get("name"):
-#                 mp4["\xa9alb"] = [album_name]
-#             if album_artist := album.get("artist"):
-#                 mp4["aART"] = [album_artist]
-#             if album_image := album.get("image"):
-#                 await sync_to_async(self._store_image)(album_image, mp4)
-#         elif image := metadata.get("image"):
-#             await sync_to_async(self._store_image)(image, mp4)
-#
-#         await sync_to_async(mp4.save)()
-#
-#     def _store_image(self, image_field: FieldFile, tags: MP4):
-#         ext = os.path.splitext(image_field.path)
-#         if ext == ".png":
-#             format = MP4Cover.FORMAT_PNG
-#         elif ext == ".jpg":
-#             format = MP4Cover.FORMAT_JPEG
-#         else:
-#             return
-#
-#         image_field.open("rb")
-#         tags["covr"] = [MP4Cover(image_field.read(), imageformat=format)]
-#         image_field.close()
-#
-#
+class MP4Editor(Editor):
+    def read(self, file: MP4) -> dict[str, any]:
+        tags = file.tags
+        metadata = {
+            "duration": int(file.info.length)
+        }
+        artists = [{"name": name} for name in tags.get("\xa9ART", [])]
+
+        def read_tag(
+            key_to_set,
+            tag_to_get,
+            dict_to_set: dict = metadata,
+            default: any = None,
+            process_func: Callable = None
+        ):
+            if value := tags.get(tag_to_get, [default])[0]:
+                if process_func:
+                    value = process_func(value)
+                dict_to_set[key_to_set] = value
+
+        read_tag("name", "\xa9nam")
+        read_tag("genre", "\xa9gen")
+        read_tag("year", "\xa9day", process_func=lambda x: int(x[:4]))
+        read_tag("number", "trkn", process_func=lambda x: x[0])
+
+        # Set album, but only if artist is available
+        if album_name := tags.get("\xa9alb"):
+            album = {'name': album_name[0]}
+            read_tag("artist", "aART", album)
+            if "artist" not in album and artists:
+                album["artist"] = artists[0]['name']
+            if "artist" in album:
+                metadata['album'] = album
+
+        # Set album or song image
+        if image := tags.get("covr"):
+            if album["artist"]:
+                album["image"] = self._cover_to_temp_file(
+                    image[0], album['name'])
+            else:
+                metadata["image"] = self._cover_to_temp_file(
+                    image[0], metadata.get('name', 'unnamed')
+                )
+
+        # Attach artists
+        if artists:
+            metadata["artists"] = artists
+
+        return metadata
+
+    def _cover_to_temp_file(
+            self,
+            image: MP4Cover,
+            name: str
+    ) -> TemporaryUploadedFile:
+        if image.FORMAT_PNG:
+            ext = ".png"
+            mime = "image/png"
+        else:
+            ext = ".jpg"
+            mime = "image/jpeg"
+        fname = f"{name}{ext}"
+        tf = TemporaryUploadedFile(fname, mime, 0, "utf-8")
+        tf.file.write(image)
+        if image_is_valid(tf):
+            return tf
+        os.remove(tf.temporary_file_path())
+
+    def write(
+        self,
+        file: FieldFile = None,
+        metadata: dict[str, any] = None,
+        song: Song = None
+    ) -> None:
+        if song:
+            self.song_to_metadata(song)
+            metadata = self.meta
+            file = song.file
+        elif file is None or metadata is None:
+            raise ValueError("`file` and `metadata` must be provided")
+
+        mp4 = MP4(file.path)
+
+        def set_tag_if_present(
+            key,
+            meta_key,
+            process_func: Callable = None,
+            meta_dict: dict = metadata
+        ):
+            if value := meta_dict.get(meta_key):
+                if process_func:
+                    value = process_func(value)
+                if isinstance(value, list):
+                    mp4[key] = value
+                else:
+                    mp4[key] = [value]
+
+        set_tag_if_present("\xa9nam", "name")
+        set_tag_if_present("\xa9day", "year", str)
+        set_tag_if_present("\xa9gen", "genre")
+        set_tag_if_present("trkn", "number", lambda x: (x, 0))
+        set_tag_if_present("\xa9ART", "artists", lambda x: [
+                           a["name"] for a in x])
+
+        if album := metadata.get("album"):
+            set_tag_if_present("\xa9alb", "name", meta_dict=album)
+            set_tag_if_present("aART", "artist", meta_dict=album)
+            set_tag_if_present(
+                "covr", "image",
+                lambda x: self._file_to_cover(x),
+                meta_dict=album
+            )
+        else:
+            set_tag_if_present(
+                "covr", "image",
+                lambda x: self._file_to_cover(x),
+            )
+
+        mp4.save()
+
+    def _file_to_cover(self, image_field: FieldFile):
+        ext = os.path.splitext(image_field.path)[1]
+        if ext == ".png":
+            format = MP4Cover.FORMAT_PNG
+        elif ext == ".jpg":
+            format = MP4Cover.FORMAT_JPEG
+        else:
+            return
+
+        ret = MP4Cover(image_field.read(), imageformat=format)
+        image_field.close()
+        return ret
+
 
 _editors = [ID3Editor()]
 _extension_map = {
@@ -356,6 +404,8 @@ def read_metadata(file: TemporaryUploadedFile) -> dict:
     if filetype := File(file):
         if isinstance(filetype, ID3FileType):
             return ID3Editor().read(filetype)
+        if isinstance(filetype, MP4):
+            return MP4Editor().read(filetype)
     return None
 
 
