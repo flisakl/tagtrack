@@ -50,13 +50,11 @@ async def create_song(
             ])
         song.album_id = album
 
-    if err := await utils.validate_audio_file(file):
-        raise err
+    await sync_to_async(utils.raise_on_invalid_audio_file)(file)
+    if image:
+        await sync_to_async(utils.raise_on_invalid_image)(image)
+        song.image = image
     song.file = file
-
-    if err := await utils.validate_image(image):
-        raise err
-    song.image = image
 
     await song.asave()
 
@@ -148,11 +146,13 @@ async def update_song(
             ])
         song.album_id = album
 
-    if file and not await utils.validate_audio_file(file):
+    if file:
+        await sync_to_async(utils.raise_on_invalid_audio_file)(file)
         await sync_to_async(song.file.delete)(save=False)
         await sync_to_async(song.file.save)(file.name, file, save=False)
 
-    if image and not await utils.validate_image(image):
+    if image:
+        await sync_to_async(utils.raise_on_invalid_image)(image)
         await sync_to_async(song.image.delete)(save=False)
         await sync_to_async(song.image.save)(image.name, image, save=False)
 
@@ -211,19 +211,29 @@ async def upload_files(
     files: list[UploadedFile] = File([])
 ):
 
-    info = await extract_metadata(files)
+    info = await sync_to_async(extract_metadata)(files)
     albums = info['albums']
     artists = info['artists']
     songs = info['songs']
     untagged_files = info['untagged']
     res = info['stats']
     songs_with_album = [s for s in songs if s['album']]
+
+    def possible_keys(song: dict) -> list[tuple[str, str]]:
+        options = []
+        if alb := song.get('album'):
+            for art in song.get('artists', []):
+                options.append((alb, art))
+        return options
+
     album_song_map = {
-        a: [s for s in songs_with_album if s['album'] == s]
+        a: [s for s in songs_with_album if a in possible_keys(s)]
         for a in albums.keys()
     }
 
-    # Set album genres to most occuring song genre
+    # Set album genre and release year
+    # Genre will be the most occuring genre of all songs
+    # Release year will be oldest year of all songs
     for name, data in albums.items():
         gcount = {}
         asongs = album_song_map.get(name)
@@ -236,7 +246,9 @@ async def upload_files(
             if count > maxval:
                 key = genre
                 maxval = count
-        data['genre'] = key
+        data['data']['genre'] = key
+        if asongs:
+            data['data']['year'] = min([s['instance'].year for s in asongs])
 
     db_artists, db_albums = await fetch_or_create_albums_and_artists(
         albums, artists
@@ -258,7 +270,7 @@ async def upload_files(
     return res
 
 
-async def add_artists_from_metadata(
+def add_artists_from_metadata(
     metadata: dict,
     artists: dict
 ) -> list[dict]:
@@ -277,9 +289,9 @@ async def add_artists_from_metadata(
     """
     ret = []
     if metadata['album'] and metadata['album']['artist']:
-        metadata['artists'].append(metadata['album']['artist'])
+        metadata['artists'].append({'name': metadata['album']['artist']})
     for art in metadata['artists']:
-        im = await utils.make_tempfile_from_apic_frame(art['image'])
+        im = art.get('image')
         key = art['name']
         if key not in artists.keys():
             artists[key] = {'data': art}
@@ -291,7 +303,7 @@ async def add_artists_from_metadata(
     return ret
 
 
-async def add_album_from_metadata(
+def add_album_from_metadata(
     metadata: dict,
     albums: dict
 ) -> dict | None:
@@ -310,10 +322,10 @@ async def add_album_from_metadata(
     """
 
     if metadata['album']:
-        im = await utils.make_tempfile_from_apic_frame(metadata['album']['image'])
+        im = metadata['album'].get('image')
         aa = metadata['album']['artist']
 
-        key = (metadata['album']['name'], aa['name'] if aa else None)
+        key = (metadata['album']['name'], aa)
 
         if key not in albums.keys():
             albums[key] = {'data': metadata['album']}
@@ -324,7 +336,7 @@ async def add_album_from_metadata(
     return None
 
 
-async def add_song_from_metadata(
+def add_song_from_metadata(
     metadata: dict,
     songs: list,
     artists: list[dict],
@@ -342,16 +354,24 @@ async def add_song_from_metadata(
         file (UploadedFile): The uploaded audio file.
     """
 
-    im = await utils.make_tempfile_from_apic_frame(metadata['image'])
+    im = utils.make_tempfile_from_apic_frame(metadata.get('image'))
     s = Song(
-        name=metadata['name'],
-        year=metadata['year'],
-        genre=metadata['genre'],
         duration=metadata['duration'],
-        number=metadata['number'],
         image=im,
         file=file
     )
+
+    def set_if_present(instance: Song, attr: str, default: any = None):
+        if val := metadata.get(attr):
+            setattr(instance, attr, val)
+        elif default:
+            setattr(instance, attr, default)
+
+    set_if_present(s, 'name', 'unnamed')
+    set_if_present(s, 'year')
+    set_if_present(s, 'genre')
+    set_if_present(s, 'number')
+
     songs.append({
         'instance': s,
         'artists': [x['data']['name'] for x in artists],
@@ -359,7 +379,7 @@ async def add_song_from_metadata(
     })
 
 
-async def extract_metadata(files: list[UploadedFile]) -> dict:
+def extract_metadata(files: list[UploadedFile]) -> dict:
     """
     Extracts song, artist, and album metadata from uploaded audio files.
 
@@ -387,12 +407,12 @@ async def extract_metadata(files: list[UploadedFile]) -> dict:
     untagged_files = []
 
     for file in files:
-        if not await utils.validate_audio_file(file):
-            meta = await tags.read_metadata(file)
+        if utils.audio_is_valid(file):
+            meta = tags.read_metadata(file)
             if meta:
-                song_artists = await add_artists_from_metadata(meta, artists)
-                song_album = await add_album_from_metadata(meta, albums)
-                await add_song_from_metadata(
+                song_artists = add_artists_from_metadata(meta, artists)
+                song_album = add_album_from_metadata(meta, albums)
+                add_song_from_metadata(
                     meta, songs, song_artists, song_album, file
                 )
             else:

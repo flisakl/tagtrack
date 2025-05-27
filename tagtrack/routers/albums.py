@@ -37,8 +37,7 @@ async def create_album(
     already exists or artist is not found.
     """
     album = Album(**form.dict(exclude_unset=True))
-    if err := await utils.validate_image(image):
-        raise err
+    await sync_to_async(utils.raise_on_invalid_image)(image)
     album.image = image
     try:
         album.artist = await Artist.objects.aget(pk=form.artist_id)
@@ -125,9 +124,10 @@ async def update_album(
     try:
         obj = await aget_object_or_404(Album, pk=album_id)
         obj.artist = await Artist.objects.aget(pk=form.artist_id)
-        if image and not await utils.validate_image(image):
-            obj.image.delete(save=False)
-            obj.image.save(image.name, image, save=False)
+        if image:
+            await sync_to_async(utils.raise_on_invalid_image)(image)
+            await sync_to_async(obj.image.delete)(save=False)
+            await sync_to_async(obj.image.save)(image.name, image, save=False)
 
         for attr, value in data.items():
             setattr(obj, attr, value)

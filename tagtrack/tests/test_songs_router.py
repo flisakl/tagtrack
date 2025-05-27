@@ -182,10 +182,10 @@ class TestSongRouter(TestHelper):
             {
                 'name': 'Lose Yourself',
                 'genre': 'Rap',
-                'year': 2013,
+                'year': 2012,
                 'number': 4,
                 'artists': [{'name': 'Eminem'}, {'name': 'Rihanna'}],
-                'album': {'name': 'The Marshall', 'year': 2013, 'genre': 'Hip-Hop', 'artist': 'Eminem'}
+                'album': {'name': 'The Marshall', 'artist': 'Eminem'}
             },
             {
                 'name': 'Rap God',
@@ -193,7 +193,7 @@ class TestSongRouter(TestHelper):
                 'year': 2013,
                 'number': 4,
                 'artists': [{'name': 'Eminem'}],
-                'album': {'name': 'The Marshall', 'year': 2013, 'genre': 'Hip-Hop', 'artist': 'Eminem'}
+                'album': {'name': 'The Marshall', 'artist': 'Eminem'}
             },
             {
                 'name': '',
@@ -201,17 +201,18 @@ class TestSongRouter(TestHelper):
                 'year': 1996,
                 'number': 2,
                 'artists': [{'name': 'Pearl Jam'}],
-                'album': {'name': 'No Code', 'year': 1996, 'genre': 'Rock'}
+                'album': {'name': 'No Code'}
             },
         ]
 
         f = [
-            self.temp_file('song.mp3', 'audio/mpeg', f"song{x}.mp3")
+            self.temp_file('song.mp3', 'audio/mpeg', f"song{x}_special.mp3")
             for x in range(len(meta))
         ]
+
         editor = ID3Editor()
         for i, data in enumerate(meta):
-            await editor.write_metadata(f[i], data)
+            editor.write(f[i], data)
 
         f = MultiValueDict({'files': f})
 
@@ -236,14 +237,14 @@ class TestSongRouter(TestHelper):
         for alb in albums:
             if alb.name == meta[0]['album']['name']:
                 self.assertEqual(alb.artist.name, meta[0]['album']['artist'])
-                self.assertEqual(alb.year, meta[0]['album']['year'])
+                self.assertEqual(alb.year, meta[0]['year'])
                 # Despite setting album genre to 'Hip-Hop', Rap is picked
                 # because it is most occurring genre in songs from this album
                 self.assertEqual(alb.genre, 'Rap')
             if alb.name == meta[2]['album']['name']:
                 self.assertEqual(alb.artist.name, 'Pearl Jam')
-                self.assertEqual(alb.year, meta[2]['album']['year'])
-                self.assertEqual(alb.genre, meta[2]['album']['genre'])
+                self.assertEqual(alb.year, meta[2]['year'])
+                self.assertEqual(alb.genre, 'Rock')
         # Check if songs are created
         qs = Song.objects.prefetch_related('artists').select_related('album').all()
         songs = await sync_to_async(list)(qs)
