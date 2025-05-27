@@ -25,58 +25,61 @@ def make_error(loc: list[str], field_name: str, msg: str):
     }
 
 
-async def validate_audio_file(
+def audio_is_valid(audio: TemporaryUploadedFile):
+    if audio is None or "audio" not in audio.content_type:
+        return False
+
+    cmd = [
+        'ffprobe',
+        '-v', 'error',
+        '-show_entries', 'format=duration',
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        audio.temporary_file_path()
+    ]
+    try:
+        subprocess.run(
+            cmd, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, check=True, text=True)
+    except Exception:
+        return False
+    return True
+
+
+def raise_on_invalid_audio_file(
     audio: TemporaryUploadedFile | None,
     loc: list[str] = ['form'],
     field: str = 'file'
 
 ) -> None | ValidationError:
-    """Returns ValidationError when audio file is invalid"""
-    if audio is None:
-        return audio
-
+    if audio_is_valid(audio):
+        return
     err = make_error(loc, field, _('File is not an audio file'))
-    ve = ValidationError([err])
-    if "audio" not in audio.content_type:
-        return ve
+    raise ValidationError([err])
 
-    cmd = [
-            'ffprobe',
-            '-v', 'error',
-            '-show_entries', 'format=duration',
-            '-of', 'default=noprint_wrappers=1:nokey=1',
-            audio.temporary_file_path()
-        ]
+
+def image_is_valid(image: TemporaryUploadedFile):
+    if "image" not in image.content_type or image is None:
+        return False
+
     try:
-        await sync_to_async(subprocess.run)(
-            cmd, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, check=True, text=True)
-    except Exception:
-        return ve
-    return None
+        im = Image.open(image.temporary_file_path())
+        im.verify()
+    except Exception as e:
+        return False
+    return True
 
 
-async def validate_image(
+def raise_on_invalid_image(
     image: TemporaryUploadedFile,
     loc: list[str] = ['form'],
     field: str = 'image'
 
 ) -> None | ValidationError:
     """Returns ValidationError when image is invalid"""
+    if image_is_valid(image):
+        return
     err = make_error(loc, field, _('File is not an image'))
-    ve = ValidationError([err])
-    if "image" not in image.content_type:
-        return ve
-
-    if image is None:
-        return ve
-
-    try:
-        im = await sync_to_async(Image.open)(image.temporary_file_path())
-        await sync_to_async(im.verify)()
-    except Exception:
-        return ve
-    return None
+    raise ValidationError([err])
 
 
 async def get_or_set_from_cache(key: str, qs, obj_pk: int = None):
@@ -111,14 +114,14 @@ def _make_temp_image(frame: APIC) -> TemporaryUploadedFile:
     return None
 
 
-async def make_tempfile_from_apic_frame(frame: APIC | None):
+def make_tempfile_from_apic_frame(frame: APIC | None):
     if not frame:
         return None
     elif frame.mime == '->':
         return None
 
-    tf = await sync_to_async(_make_temp_image)(frame)
-    if not await validate_image(tf):
+    tf = _make_temp_image(frame)
+    if not raise_on_invalid_image(tf):
         return tf
     return None
 
