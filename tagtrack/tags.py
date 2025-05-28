@@ -4,7 +4,7 @@ from mutagen import File, FileType, Tags
 from mutagen.id3 import ID3FileType, PictureType, ID3
 from mutagen.id3 import APIC, TPE1, TPE2, TALB, TIT2, TDRC, TCON, TRCK
 from mutagen._constants import GENRES
-from mutagen.mp4 import MP4, MP4Cover
+from mutagen.mp4 import MP4, MP4Cover, MP4Tags
 from mutagen.flac import FLAC, Picture
 from mutagen.oggopus import OggOpus
 from mutagen.oggvorbis import OggVorbis
@@ -28,7 +28,7 @@ class Editor:
 
     def write(
         self,
-        file: FieldFile = None,
+        file: FieldFile | TemporaryUploadedFile = None,
         metadata: dict[str, any] = None,
         song: Song = None
     ) -> None:
@@ -191,7 +191,7 @@ class ID3Editor(Editor):
 
     def write(
         self,
-        file: FieldFile = None,
+        file: FieldFile | TemporaryUploadedFile = None,
         metadata: dict[str, any] = None,
         song: Song = None
     ) -> None:
@@ -335,7 +335,7 @@ class MP4Editor(Editor):
 
     def write(
         self,
-        file: FieldFile = None,
+        file: FieldFile | TemporaryUploadedFile = None,
         metadata: dict[str, any] = None,
         song: Song = None
     ) -> None:
@@ -346,7 +346,9 @@ class MP4Editor(Editor):
         elif file is None or metadata is None:
             raise ValueError("`file` and `metadata` must be provided")
 
-        mp4 = MP4(file.path)
+        path = file.path if isinstance(file, FieldFile) else file.temporary_file_path()
+        mp4 = MP4(path)
+        mp4.tags = MP4Tags()
 
         def set_tag_if_present(
             key,
@@ -382,7 +384,6 @@ class MP4Editor(Editor):
                 "covr", "image",
                 lambda x: self._file_to_cover(x),
             )
-
         mp4.save()
 
     def _file_to_cover(self, image_field: FieldFile):
@@ -447,7 +448,7 @@ class VCommentEditor(Editor):
             dict_to_set: dict = self.meta,
             process_func: Callable = None
         ):
-            if value := self.tags.get(key_to_get, [])[0]:
+            if value := self.tags.get(key_to_get, [None])[0]:
                 if process_func:
                     value = process_func(value)
                 dict_to_set[key_to_set] = value
@@ -492,7 +493,7 @@ class VCommentEditor(Editor):
 
     def write(
         self,
-        file: FieldFile = None,
+        file: FieldFile | TemporaryUploadedFile = None,
         metadata: dict[str, any] = None,
         song: Song = None
     ) -> None:
@@ -503,7 +504,8 @@ class VCommentEditor(Editor):
         elif file is None or metadata is None:
             raise ValueError("`file` and `metadata` must be provided")
 
-        audio = File(file.path, easy=True)
+        path = file.path if isinstance(file, FieldFile) else file.temporary_file_path()
+        audio = File(path, easy=True)
         if not isinstance(audio.tags, VCommentDict):
             raise ValueError("File format does not support Vorbis comments")
 
@@ -576,18 +578,33 @@ _extension_map = {
 
 
 def read_metadata(file: TemporaryUploadedFile) -> dict:
-    if filetype := File(file):
+    if filetype := File(file.temporary_file_path()):
+        editor = None
         if isinstance(filetype, ID3FileType):
-            return ID3Editor().read(filetype)
+            editor = ID3Editor()
         if isinstance(filetype, MP4):
-            return MP4Editor().read(filetype)
+            editor = MP4Editor()
         if isinstance(filetype.tags, VCommentDict):
-            return VCommentEditor().read(filetype)
+            editor = VCommentEditor()
+        if editor:
+            return editor.read(filetype)
     return None
 
 
-def write_metadata(song: Song) -> dict:
-    file = song.file
-    editor = _extension_map.get(os.path.splittext(file.path)[1])
-    if editor:
-        editor.write(song=song)
+def write_metadata(
+    temp_file: TemporaryUploadedFile = None,
+    meta: dict = None,
+    song: Song = None
+) -> dict:
+    if song is not None:
+        file = song.file
+        if editor := _extension_map.get(os.path.splitext(file.path)[1]):
+            editor.write(song=song)
+    elif all([x is not None for x in [temp_file, meta]]):
+        file = temp_file
+        path = temp_file.temporary_file_path()
+        if editor := _extension_map.get(os.path.splitext(path)[1]):
+            editor.write(file, meta)
+    else:
+        msg = '`song` attribute must be passed or `temp_file` and `meta`'
+        raise ValueError(msg)

@@ -9,7 +9,7 @@ from io import BytesIO
 
 from tagtrack.routers import songs_router
 from tagtrack.models import Artist, Album, Song
-from tagtrack.tags import ID3Editor
+from tagtrack.tags import write_metadata
 
 
 class TestSongRouter(TestHelper):
@@ -203,16 +203,34 @@ class TestSongRouter(TestHelper):
                 'artists': [{'name': 'Pearl Jam'}],
                 'album': {'name': 'No Code'}
             },
+            {
+                'name': 'Battery',
+                'genre': 'Metal',
+                'year': 1986,
+                'number': 1,
+                'artists': [{'name': 'Metallica'}],
+                'album': {'name': 'Master of Puppets'}
+            },
+            {
+                'name': 'If You Have Ghosts',
+                'genre': 'Pop',
+                'year': 2013,
+                'number': 1,
+                'artists': [{'name': 'Ghost'}],
+                'album': {'name': 'If You Have Ghost'}
+            },
         ]
 
         f = [
-            self.temp_file('song.mp3', 'audio/mpeg', f"song{x}_special.mp3")
-            for x in range(len(meta))
+            self.temp_file('song.mp3', 'audio/mpeg', "song_0_special.mp3"),
+            self.temp_file('song.flac', 'audio/flac', "song_0_special.flac"),
+            self.temp_file('song.opus', 'audio/ogg', "song_0_special.opus"),
+            self.temp_file('song.ogg', 'audio/ogg', "song_0_special.ogg"),
+            self.temp_file('song.mp4', 'audio/mp4', "song_0_special.mp4"),
         ]
 
-        editor = ID3Editor()
         for i, data in enumerate(meta):
-            editor.write(f[i], data)
+            write_metadata(f[i], data)
 
         f = MultiValueDict({'files': f})
 
@@ -220,7 +238,7 @@ class TestSongRouter(TestHelper):
         json = response.json()
 
         expected = {
-            'total_count':  3,
+            'total_count':  5,
             'invalid_count':  0,
             'invalid_files':  [],
         }
@@ -228,12 +246,13 @@ class TestSongRouter(TestHelper):
         self.assertJSONMatchesDict(json, expected)
         # Check if artists are created
         artists = await sync_to_async(list)(Artist.objects.all())
-        self.assertEqual(len(artists), 3)
+        self.assertEqual(len(artists), 5)
         for art in artists:
-            self.assertIn(art.name, ['Pearl Jam', 'Eminem', 'Rihanna'])
+            self.assertIn(art.name, ['Pearl Jam', 'Eminem', 'Rihanna', 'Ghost',
+                                     'Metallica', 'Billy Joel'])
         # Check if albums are created and artists are attached
         albums = await sync_to_async(list)(Album.objects.select_related('artist').all())
-        self.assertEqual(len(albums), 2)
+        self.assertEqual(len(albums), 4)
         for alb in albums:
             if alb.name == meta[0]['album']['name']:
                 self.assertEqual(alb.artist.name, meta[0]['album']['artist'])
@@ -245,19 +264,33 @@ class TestSongRouter(TestHelper):
                 self.assertEqual(alb.artist.name, 'Pearl Jam')
                 self.assertEqual(alb.year, meta[2]['year'])
                 self.assertEqual(alb.genre, 'Rock')
+            if alb.name == meta[3]['album']['name']:
+                self.assertEqual(alb.artist.name, 'Metallica')
+                self.assertEqual(alb.year, meta[3]['year'])
+                self.assertEqual(alb.genre, 'Metal')
+            if alb.name == meta[4]['album']['name']:
+                self.assertEqual(alb.artist.name, 'Ghost')
+                self.assertEqual(alb.year, meta[4]['year'])
+                self.assertEqual(alb.genre, 'Pop')
         # Check if songs are created
         qs = Song.objects.prefetch_related('artists').select_related('album').all()
         songs = await sync_to_async(list)(qs)
-        self.assertEqual(len(songs), 3)
+        self.assertEqual(len(songs), 5)
         first = songs[0]
         second = songs[1]
         third = songs[2]
+        fourth = songs[3]
+        fifth = songs[4]
         self.assertEqual(len(first.artists.all()), 2)
         self.assertEqual(first.album.name, meta[0]['album']['name'])
         self.assertEqual(len(second.artists.all()), 1)
         self.assertEqual(second.album.name, meta[0]['album']['name'])
         self.assertEqual(len(third.artists.all()), 1)
         self.assertEqual(third.album.name, meta[2]['album']['name'])
+        self.assertEqual(len(fourth.artists.all()), 1)
+        self.assertEqual(fourth.album.name, meta[3]['album']['name'])
+        self.assertEqual(len(fifth.artists.all()), 1)
+        self.assertEqual(fifth.album.name, meta[4]['album']['name'])
 
     async def test_untagged_files_can_be_uploaded(self):
         files = [
