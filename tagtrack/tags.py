@@ -5,7 +5,12 @@ from mutagen.id3 import ID3FileType, PictureType, ID3
 from mutagen.id3 import APIC, TPE1, TPE2, TALB, TIT2, TDRC, TCON, TRCK
 from mutagen._constants import GENRES
 from mutagen.mp4 import MP4, MP4Cover
+from mutagen.flac import FLAC, Picture
+from mutagen.oggopus import OggOpus
+from mutagen.oggvorbis import OggVorbis
+from mutagen._vorbis import VCommentDict
 import os
+import base64
 
 from tagtrack.utils import image_is_valid
 from .models import Song
@@ -23,8 +28,8 @@ class Editor:
 
     def write(
         self,
-        file: FieldFile,
-        metadata: dict[str, any],
+        file: FieldFile = None,
+        metadata: dict[str, any] = None,
         song: Song = None
     ) -> None:
         raise NotImplementedError()
@@ -394,9 +399,179 @@ class MP4Editor(Editor):
         return ret
 
 
-_editors = [ID3Editor()]
+class VCommentEditor(Editor):
+    def _get_pictures(self) -> list[Picture]:
+        if isinstance(self.filetype, FLAC):
+            return self.filetype.pictures
+
+        block = self.tags.get('metadata_block_picture', [])
+        pics = []
+        for encoded_pic in block:
+            try:
+                data = base64.b64decode(encoded_pic)
+            except (TypeError, ValueError):
+                continue
+            try:
+                picture = Picture(data)
+                pics.append(picture)
+            except Exception:
+                continue
+        return pics
+
+    def _picture_to_temp_file(
+        self,
+        picture: Picture,
+        name: str
+    ):
+        ext = mimetypes.guess_extension(picture.mime)
+        if ext:
+            fname = f"{name}{ext}"
+            tuf = TemporaryUploadedFile(fname, picture.mime, 0, "utf-8")
+            tuf.file.write(picture.data)
+            tuf.file.seek(0)
+            if image_is_valid(tuf):
+                return tuf
+
+    def read(self, file: OggVorbis | OggOpus | FLAC) -> dict[str, any]:
+        audio = file
+        if not isinstance(audio.tags, VCommentDict):
+            raise ValueError("File does not contain Vorbis comments")
+
+        self.tags = audio.tags
+        self.filetype = file
+        self.meta = {"duration": int(file.info.length)}
+
+        def set_if_present(
+            key_to_set: str,
+            key_to_get: str,
+            dict_to_set: dict = self.meta,
+            process_func: Callable = None
+        ):
+            if value := self.tags.get(key_to_get, [])[0]:
+                if process_func:
+                    value = process_func(value)
+                dict_to_set[key_to_set] = value
+
+        set_if_present("name", "TITLE")
+        set_if_present("genre", "GENRE")
+        set_if_present("year", "DATE", process_func=int)
+        set_if_present("number", "TRACKNUMBER", process_func=int)
+
+        album = {}
+        pictures = self._get_pictures()
+
+        artists = self.tags.get('ARTIST', [])
+        artist_map = {a: {'name': a} for a in artists}
+        if album_name := self.tags.get('ALBUM'):
+            album['name'] = album_name[0]
+            set_if_present("artist", "ALBUMARTIST", album)
+            if 'artist' not in album and artists:
+                album['artist'] = artists[0]
+
+        # Create temp files for album, image and artists
+        for p in pictures:
+            if p.type in [PictureType.COVER_FRONT, PictureType.MEDIA]:
+                if album.get('artist') and not album.get('image'):
+                    if pic := self._picture_to_temp_file(p, album['name']):
+                        album['image'] = pic
+                elif not self.meta.get('image'):
+                    name = self.meta.get('name', 'unnamed')
+                    if pic := self._picture_to_temp_file(p, name):
+                        self.meta['image'] = pic
+
+            elif p.type == PictureType.ARTIST:
+                if a_dict := artist_map.get(p.desc):
+                    if pic := self._picture_to_temp_file(p, a_dict['name']):
+                        a_dict['image'] = pic
+        if artists:
+            self.meta['artists'] = list(artist_map.values())
+        if album and album.get('artist'):
+            self.meta['album'] = album
+
+        return self.meta
+
+    def write(
+        self,
+        file: FieldFile = None,
+        metadata: dict[str, any] = None,
+        song: Song = None
+    ) -> None:
+        if song:
+            self.song_to_metadata(song)
+            metadata = self.meta
+            file = song.file
+        elif file is None or metadata is None:
+            raise ValueError("`file` and `metadata` must be provided")
+
+        audio = File(file.path, easy=True)
+        if not isinstance(audio.tags, VCommentDict):
+            raise ValueError("File format does not support Vorbis comments")
+
+        self.filetype = audio
+        self.tags: VCommentDict = audio.tags
+        self.tags.clear()
+
+        def set_tag(key: str, value: any, process_func: Callable = None):
+            if value:
+                if process_func:
+                    value = process_func(value)
+                self.tags[key.upper()] = value
+
+        artists = metadata.get('artists', [])
+        set_tag('title', metadata.get('name'))
+        set_tag('genre', metadata.get('genre'))
+        set_tag('date', metadata.get('year'), str)
+        set_tag('tracknumber', metadata.get('number'), str)
+        set_tag('artist', [a['name'] for a in artists])
+
+        if album := metadata.get('album'):
+            set_tag('album', album.get('name'))
+            set_tag('albumartist', album.get('artist'))
+            if im := album.get('image'):
+                self._embed_picture(
+                    im, album.get('name'), PictureType.COVER_FRONT,
+                    isinstance(self.filetype, FLAC)
+                )
+
+        # Attach pictures
+        for art in metadata.get('artists', []):
+            if im := art.get('image'):
+                self._embed_picture(
+                    im, art['name'], PictureType.ARTIST,
+                    isinstance(file, FLAC))
+        audio.save()
+
+    def _embed_picture(
+        self,
+        image_field: FieldFile,
+        name: str,
+        type: PictureType,
+        flac: bool = False
+    ):
+        mime, _ = mimetypes.guess_type(image_field.path)
+        if mime:
+            p = Picture()
+            p.type = type
+            p.desc = name
+            p.mime = mime
+            p.data = image_field.read()
+            if flac:
+                self.filetype.add_picture(p)
+            else:
+                metablock = self.tags.get('metadata_block_picture', [])
+                pdata = p.write()
+                encoded = base64.b64encode(pdata)
+                metablock.append(encoded.decode('ascii'))
+                self.tags['metadata_block_picture'] = metablock
+
+
+_editors = [ID3Editor(), MP4Editor(), VCommentEditor()]
 _extension_map = {
     '.mp3': _editors[0],
+    '.mp4': _editors[1],
+    '.ogg': _editors[2],
+    '.opus': _editors[2],
+    '.flac': _editors[2],
 }
 
 
@@ -406,6 +581,8 @@ def read_metadata(file: TemporaryUploadedFile) -> dict:
             return ID3Editor().read(filetype)
         if isinstance(filetype, MP4):
             return MP4Editor().read(filetype)
+        if isinstance(filetype.tags, VCommentDict):
+            return VCommentEditor().read(filetype)
     return None
 
 

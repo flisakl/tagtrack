@@ -1,8 +1,11 @@
 from .helper import TestHelper
 from mutagen import File
 from mutagen.mp4 import MP4
+from mutagen.flac import FLAC
+from mutagen.oggopus import OggOpus
+from mutagen.oggvorbis import OggVorbis
 
-from tagtrack.tags import ID3Editor, Editor, MP4Editor
+from tagtrack.tags import ID3Editor, Editor, MP4Editor, VCommentEditor
 from tagtrack.models import Song
 
 
@@ -115,6 +118,54 @@ class TestEditors(TestHelper):
     async def test_metadata_are_written_properly_to_mp4_files(self):
         song = await self.prepare_song("song.mp4", "audio/mpeg")
         editor = MP4Editor()
+
+        editor.write(song=song)
+
+        read = editor.read(File(song.file))
+        self.check_metadata_writing(read, song)
+
+    async def test_metadata_are_read_properly_from_flac_file(self):
+        f = FLAC(self.temp_file('song.flac', 'audio/flac'))
+        editor = VCommentEditor()
+        meta = editor.read(f)
+
+        self.check_metadata_reading(meta)
+
+    async def test_metadata_are_written_properly_to_flac_files(self):
+        song = await self.prepare_song("song.flac", "audio/flac")
+        editor = VCommentEditor()
+
+        editor.write(song=song)
+
+        read = editor.read(File(song.file))
+        self.check_metadata_writing(read, song)
+
+    async def test_metadata_are_read_properly_from_ogg_file(self):
+        f = OggVorbis(self.temp_file('song.ogg', 'audio/ogg'))
+        editor = VCommentEditor()
+        meta = editor.read(f)
+
+        self.check_metadata_reading(meta)
+
+    async def test_metadata_are_written_properly_to_ogg_files(self):
+        song = await self.prepare_song("song.ogg", "audio/ogg")
+        editor = VCommentEditor()
+
+        editor.write(song=song)
+
+        read = editor.read(File(song.file))
+        self.check_metadata_writing(read, song)
+
+    async def test_metadata_are_read_properly_from_opus_file(self):
+        f = OggOpus(self.temp_file('song.opus', 'audio/ogg'))
+        editor = VCommentEditor()
+        meta = editor.read(f)
+
+        self.check_metadata_reading(meta)
+
+    async def test_metadata_are_written_properly_to_opus_files(self):
+        song = await self.prepare_song("song.opus", "audio/ogg")
+        editor = VCommentEditor()
 
         editor.write(song=song)
 

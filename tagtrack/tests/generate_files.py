@@ -8,6 +8,7 @@ from mutagen.flac import FLAC, Picture
 from mutagen.oggvorbis import OggVorbis
 from mutagen.oggopus import OggOpus
 from mutagen.mp4 import MP4, MP4Cover
+import base64
 
 # === Configuration ===
 output_dir = Path("test_files")
@@ -88,6 +89,11 @@ def convert_audio(wav_path: Path, format: str, output_dir: Path) -> Path:
 # === Embed metadata and cover ===
 
 
+def encode_picture(pic: Picture):
+    encoded = base64.b64encode(pic.write())
+    return encoded.decode('ascii')
+
+
 def embed_metadata(filepath, format, metadata):
     album = metadata["album"]
     artists = metadata["artists"]  # list of artist dicts
@@ -146,6 +152,7 @@ def embed_metadata(filepath, format, metadata):
         pic.width = 500
         pic.height = 500
         pic.depth = 24
+        pic.desc = album_name
         audio.add_picture(pic)
 
         # Add artist pictures
@@ -158,7 +165,7 @@ def embed_metadata(filepath, format, metadata):
             pic.width = 500
             pic.height = 500
             pic.depth = 24
-            pic.description = artist["name"]
+            pic.desc = artist["name"]
             audio.add_picture(pic)
 
         audio.save()
@@ -175,6 +182,31 @@ def embed_metadata(filepath, format, metadata):
         audio["genre"] = genre
         audio["tracknumber"] = track
         audio["artist"] = artist_names
+        pictures = []
+        # Add album cover
+        pic = Picture()
+        pic.data = cover_data
+        pic.type = 3
+        pic.mime = "image/jpeg"
+        pic.width = 500
+        pic.height = 500
+        pic.depth = 24
+        pic.desc = album_name
+        pictures.append(encode_picture(pic))
+
+        # Add artist pictures
+        for artist in artists:
+            img_data = open(artist["image"], "rb").read()
+            pic = Picture()
+            pic.data = img_data
+            pic.type = 8  # Other
+            pic.mime = "image/jpeg"
+            pic.width = 500
+            pic.height = 500
+            pic.depth = 24
+            pic.desc = artist["name"]
+            pictures.append(encode_picture(pic))
+        audio["metadata_block_picture"] = pictures
         audio.save()
         # OggVorbis does not support embedded images via Mutagen
 
