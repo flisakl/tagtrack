@@ -83,6 +83,7 @@ def raise_on_invalid_image(
 
 
 async def get_or_set_from_cache(key: str, qs, obj_pk: int = None):
+    key = f"tagtrack-{key}"
     data = await sync_to_async(cache.get)(key, None)
     if data is not None:
         return data

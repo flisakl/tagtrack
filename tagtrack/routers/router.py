@@ -2,6 +2,7 @@ from ninja import Router, Schema, FilterSchema, Query
 from django.db.models import Count, Sum
 from asgiref.sync import sync_to_async
 from django.core.cache import cache
+from urllib.parse import urlencode
 
 from tagtrack import AUTH
 from tagtrack.models import Artist, Song, Album
@@ -77,6 +78,11 @@ async def search(
     request,
     filters: Query[CombinedFilterSchema]
 ):
+    key = f"tagtrack-search:{urlencode(sorted(request.GET.items()), doseq=True)}"
+    data = await sync_to_async(cache.get)(key, None)
+    if data:
+        return data
+
     alb_filters = AlbumFilterSchema(
         **_gen_dict(['name', 'year_min', 'year_max', 'genre', 'duration_min',
                      'duration_max', 'album_id', 'album_name'], filters)
@@ -104,8 +110,10 @@ async def search(
     for song in songs:
         utils.fill_song_fields(song, song.album)
 
-    return {
+    data = {
         'artists': artists,
         'songs': songs,
         'albums': albums,
     }
+    await sync_to_async(cache.set)(key, data)
+    return data
