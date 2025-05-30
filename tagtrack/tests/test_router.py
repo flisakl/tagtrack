@@ -1,5 +1,6 @@
 from ninja.testing import TestAsyncClient
 from .helper import TestHelper
+from mutagen._constants import GENRES
 
 from tagtrack.routers import router
 
@@ -41,3 +42,11 @@ class TestGenericRouter(TestHelper):
         self.assertEqual(len(json['artists']), 0)
         self.assertJSONMatchesDict(json['albums'][0], expected_album)
         self.assertJSONMatchesDict(json['songs'][0], expected_song)
+
+    async def test_user_can_retrieve_genres(self):
+        response = await self.client.get('/genres')
+        json = response.json()['items']
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(json), len(GENRES))
+        self.assertEqual([x['name'] for x in json], GENRES)

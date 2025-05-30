@@ -1,6 +1,7 @@
 from ninja import Router, Schema, FilterSchema, Query
 from django.db.models import Count, Sum
 from asgiref.sync import sync_to_async
+from django.core.cache import cache
 
 from tagtrack import AUTH
 from tagtrack.models import Artist, Song, Album
@@ -10,6 +11,7 @@ from .schemas import (
     AlbumFilterSchema, AlbumWithArtistSchemaOut,
     SongSchemaOut, SongFilterSchema
 )
+from mutagen._constants import GENRES
 
 
 router = Router(tags=['Generic'])
@@ -36,11 +38,31 @@ class CombinedFilterSchema(FilterSchema):
     album_id: int | None = None
 
 
+class GenreSchemaOut(Schema):
+    items: list[dict]
+
+
 def _gen_dict(keys: list[str], filter: CombinedFilterSchema) -> dict:
     ret = {}
     for key in keys:
         ret[key] = getattr(filter, key)
     return ret
+
+
+@router.get(
+    '/genres',
+    response=GenreSchemaOut,
+    auth=AUTH['READ'],
+    description='Collection of valid genres'
+)
+async def get_genres(request):
+    key = "tagtrack-genres"
+    data = await sync_to_async(cache.get)(key, None)
+    if data:
+        return {'items': data}
+    data = [{'name': x} for x in GENRES]
+    await sync_to_async(cache.set)(key, data)
+    return {'items': data}
 
 
 @router.get(
