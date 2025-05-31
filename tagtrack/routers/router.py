@@ -1,4 +1,4 @@
-from ninja import Router, Schema, FilterSchema, Query
+from ninja import Router, Schema, FilterSchema, Query, Field
 from django.db.models import Count, Sum
 from asgiref.sync import sync_to_async
 from django.core.cache import cache
@@ -10,7 +10,7 @@ from tagtrack import utils
 from .schemas import (
     ArtistSchemaOut, ArtistFilterSchema,
     AlbumFilterSchema, AlbumWithArtistSchemaOut,
-    SongSchemaOut, SongFilterSchema
+    SongSchemaOut, SongFilterSchema, Genre, PositiveInt
 )
 from mutagen._constants import GENRES
 
@@ -25,18 +25,18 @@ class CombinedSchema(Schema):
 
 
 class CombinedFilterSchema(FilterSchema):
-    name: str | None = None
-    genre: str | None = None
-    album_name: str | None = None
-    song_count: int | None = None
-    album_count: int | None = None
-    songs_min: int | None = None
-    songs_max: int | None = None
-    year_min: int | None = None
-    year_max: int | None = None
-    duration_min: int | None = None
-    duration_max: int | None = None
-    album_id: int | None = None
+    name: str = Field(None)
+    album_name: str = Field(None)
+    song_count: int = Field(None, ge=0, q='song_count__gte')
+    album_count: int = Field(None, ge=0, q='album_count__gte')
+    songs_min: int = Field(None, ge=0, q='song_count__gte')
+    songs_max: int = Field(None, ge=0, q='song_count__lte')
+    album_id: PositiveInt = Field(None)
+    year_min: int = Field(None, ge=0, q='year__gte')
+    year_max: int = Field(None, ge=0, q='year__lte')
+    genre: Genre = Field(None, q='genre__icontains')
+    duration_min: int = Field(None, ge=0, q='total_duration__gte', description='in minutes')
+    duration_max: int = Field(None, ge=0, q='total_duration__lte', description='in minutes')
 
 
 class GenreSchemaOut(Schema):
@@ -46,7 +46,8 @@ class GenreSchemaOut(Schema):
 def _gen_dict(keys: list[str], filter: CombinedFilterSchema) -> dict:
     ret = {}
     for key in keys:
-        ret[key] = getattr(filter, key)
+        if value := getattr(filter, key):
+            ret[key] = value
     return ret
 
 

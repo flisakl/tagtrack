@@ -72,7 +72,7 @@ class TestSongRouter(TestHelper):
         albums = await self.create_albums()
         await self.create_songs(albums)
         rdata = [
-            {'genre': 'roc'},
+            {'genre': 'rock'},
             {'name': 'judy'},
             {'year_min': 1970, 'year_max': 1980},
             {'duration_max': 200},
@@ -104,6 +104,7 @@ class TestSongRouter(TestHelper):
                 }
             }]
         }
+
         self.assertTrue(all([x.status_code == 200 for x in r]))
         self.assertEqual(j[0]['count'], 5)
         self.assertEqual(j[1]['count'], 1)
@@ -179,7 +180,10 @@ class TestSongRouter(TestHelper):
         f = self.temp_file('song.mp3', upload_filename='old.mp3')
         obj = await self.create_song(f, album=album)
         f = {'image': self.temp_file()}
-        data = {'name': 'New name', 'duration': 145, 'album_id': 5}
+        data = QueryDict(mutable=True)
+        data.update({'name': 'New name', 'duration': 145, 'album_id': 5})
+        for x in [artist.pk]:
+            data.appendlist('artist_ids', x)
 
         res = await self.client.patch(f'/{obj.pk}', data=data, FILES=f)
         json = res.json()

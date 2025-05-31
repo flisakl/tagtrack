@@ -1,6 +1,27 @@
 from ninja import ModelSchema, Field, FilterSchema, Schema
+from pydantic import AfterValidator
+from typing import Annotated, TypeVar
+from annotated_types import Len, Gt
+from mutagen._constants import GENRES
+from django.utils.translation import gettext_lazy as _
 
 from tagtrack.models import Artist, Song, Album
+
+LOWER_GENRES = [x.lower() for x in GENRES]
+
+
+def is_mutagen_genre(value: str):
+    if value.lower() not in LOWER_GENRES:
+        raise ValueError(_('Invalid genre'))
+    return value
+
+
+# Custom types
+T = TypeVar('T')
+
+PositiveInt = Annotated[int, Field(gt=0)]
+ArtistIDList = Annotated[list[PositiveInt], Len(min_length=1)]
+Genre = Annotated[str, AfterValidator(is_mutagen_genre)]
 
 
 __all__ = [
@@ -11,27 +32,25 @@ __all__ = [
 ]
 
 
-class ArtistSchemaIn(ModelSchema):
-    class Meta:
-        model = Artist
-        fields = ['name']
+class ArtistSchemaIn(Schema):
+    name: str = Field(min_length=1)
 
 
-class AlbumSchemaIn(ModelSchema):
-    artist_id: int
+class AlbumSchemaIn(Schema):
+    name: str = Field(min_length=1)
+    artist_id: PositiveInt
+    year: PositiveInt = Field(None)
+    genre: Genre = Field(None)
 
-    class Meta:
-        model = Album
-        fields = ['name', 'genre', 'year']
 
-
-class SongSchemaIn(ModelSchema):
-    album_id: int | None = None
-    artist_ids: list[int] = []
-
-    class Meta:
-        model = Song
-        fields = ['name', 'duration', 'genre', 'year', 'number']
+class SongSchemaIn(Schema):
+    album_id: PositiveInt
+    artist_ids: ArtistIDList
+    genre: Genre = Field(None)
+    year: PositiveInt = Field(None)
+    number: PositiveInt = Field(None)
+    duration: PositiveInt
+    name: str = Field(min_length=1)
 
 
 class AlbumSchemaOut(ModelSchema):
@@ -73,37 +92,33 @@ class SongSchemaOut(ModelSchema):
 
 
 class ArtistFilterSchema(FilterSchema):
-    name: str | None = Field(None, q='name__icontains')
-    song_count: int | None = Field(0, q='song_count__gte')
-    album_count: int | None = Field(0, q='album_count__gte')
+    name: str = Field(None, q='name__icontains')
+    song_count: int = Field(0, ge=0, q='song_count__gte')
+    album_count: int = Field(0, ge=0, q='album_count__gte')
 
 
 class AlbumFilterSchema(FilterSchema):
-    name: str | None = Field(None, q='name__icontains')
-    songs_min: int | None = Field(None, q='song_count__gte')
-    songs_max: int | None = Field(None, q='song_count__lte')
-    year_min: int | None = Field(None, q='year__gte')
-    year_max: int | None = Field(None, q='year__lte')
-    genre: str | None = Field(None, q='genre__icontains')
-    duration_min: int | None = Field(None, q='total_duration__gte',
-                                     description='in minutes')
-    duration_max: int | None = Field(None, q='total_duration__lte',
-                                     description='in minutes')
-    artist_id: int | None = Field(None, q='artist__pk')
-    artist_name: str | None = Field(None, q='artist__name__icontains')
+    name: str = Field(None, q='name__icontains')
+    songs_min: int = Field(None, ge=0, q='song_count__gte')
+    songs_max: int = Field(None, ge=0, q='song_count__lte')
+    year_min: int = Field(None, ge=0, q='year__gte')
+    year_max: int = Field(None, ge=0, q='year__lte')
+    genre: Genre = Field(None, q='genre__icontains')
+    duration_min: int = Field(None, ge=0, q='total_duration__gte', description='in minutes')
+    duration_max: int = Field(None, ge=0, q='total_duration__lte', description='in minutes')
+    artist_id: PositiveInt = Field(None, q='artist__pk')
+    artist_name: str = Field(None, q='artist__name__icontains')
 
 
 class SongFilterSchema(FilterSchema):
-    name: str | None = Field(None, q='name__icontains')
-    year_min: int | None = Field(None, q='year__gte')
-    year_max: int | None = Field(None, q='year__lte')
-    genre: str | None = Field(None, q='genre__icontains')
-    duration_min: int | None = Field(None, q='duration__gte',
-                                     description='in seconds')
-    duration_max: int | None = Field(None, q='duration__lte',
-                                     description='in seconds')
-    album_id: int | None = Field(None, q='album__pk')
-    album_name: str | None = Field(None, q='album__name__icontains')
+    name: str = Field(None, q='name__icontains')
+    year_min: int = Field(None, ge=0, q='year__gte')
+    year_max: int = Field(None, ge=0, q='year__lte')
+    genre: Genre = Field(None, q='genre__icontains')
+    duration_min: int = Field(None, ge=0, q='duration__gte', description='in minutes')
+    duration_max: int = Field(None, ge=0, q='duration__lte', description='in minutes')
+    album_id: PositiveInt = Field(None, q='album__pk')
+    album_name: str = Field(None, q='album__name__icontains')
 
 
 class SingleArtistSchemaOut(ModelSchema):
