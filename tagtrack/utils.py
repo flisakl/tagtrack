@@ -102,9 +102,10 @@ async def get_or_set_from_cache(key: str, qs, obj_pk: int = None):
 
 
 def fill_song_fields(song: Song, album: Album):
-    song.image = album.image
-    song.genre = song.genre if song.genre else album.genre
-    song.year = song.year if song.year else album.year
+    if album:
+        song.image = song.image if song.image else album.image
+        song.genre = song.genre if song.genre else album.genre
+        song.year = song.year if song.year else album.year
 
 
 def _make_temp_image(frame: APIC) -> TemporaryUploadedFile:
