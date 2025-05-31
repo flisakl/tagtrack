@@ -41,10 +41,10 @@ class Song(models.Model):
     duration = models.PositiveSmallIntegerField(
         help_text=_("in seconds"), validators=[MinValueValidator(1)])
     genre = models.CharField(max_length=50, null=True, blank=True)
-    number = models.IntegerField(default=1, validators=[MinValueValidator(1)],
+    number = models.IntegerField(null=True, blank=True, validators=[MinValueValidator(1)],
                                  help_text=_('Song position in album')
                                  )
-    year = models.IntegerField(_('release year'), default=1)
+    year = models.PositiveIntegerField(_('release year'), null=True, blank=True)
 
     artists = models.ManyToManyField(Artist, related_name='songs')
     album = models.ForeignKey(Album, null=True, blank=True,

@@ -66,12 +66,13 @@ class TestHelper(TestCase):
         genre: str = 'Rock',
         year: int = 1970,
         duration: int = 180,
+        number: int = 1,
         artists: list[Artist] = [],
         image: TemporaryUploadedFile = None,
         album: Album = None
     ):
         obj = await Song.objects.acreate(
-            name=name, image=image,
+            name=name, image=image, number=number,
             album=album, file=file, genre=genre, year=year, duration=duration
         )
 
@@ -128,6 +129,7 @@ class TestHelper(TestCase):
         ]
         for idx, x in enumerate(data):
             x['file'] = self.temp_file('song.mp3', 'audio/mpeg', f'song_{idx}.mp3')
+            x['number'] = 1
         objs = [Song(**d) for d in data]
         ret = await Song.objects.abulk_create(objs)
         SongArtist = Song.artists.through
