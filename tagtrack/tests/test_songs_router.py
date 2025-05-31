@@ -45,6 +45,29 @@ class TestSongRouter(TestHelper):
         self.assertEqual(json['artists'][0]['name'], artist.name)
         self.assertEqual(json['artists'][1]['name'], a2.name)
 
+    async def test_song_can_not_be_added_without_audio_file(self):
+        artist = await self.create_artist(name='Squire Tuck')
+        a2 = await self.create_artist(name='Octopus')
+        album = await self.create_album(
+            name='Squire Tuck Soundtracks for the Soul', artist=artist)
+        data = QueryDict(mutable=True)
+        data.update({
+            'name': 'Yearning For Better Days',
+            'duration': 166, 'genre': 'Instrumental', 'year': 2018,
+            'number': 6, 'album_id': album.pk,
+        })
+        for x in [artist.pk, a2.pk]:
+            data.appendlist('artist_ids', x)
+        files = {
+            'image': self.temp_file(),
+        }
+
+        response = await self.client.post('', data=data, FILES=files)
+        json = response.json()
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn('file', json['detail'][0]['loc'])
+
     async def test_songs_can_be_filtered(self):
         albums = await self.create_albums()
         await self.create_songs(albums)

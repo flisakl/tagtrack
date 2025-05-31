@@ -41,7 +41,7 @@ class CustomLimitPagination(LimitOffsetPagination):
         offset = self.offset or pagination.offset
         limit: int = min(self.limit or pagination.limit, 100)
         return {
-            "items": queryset[offset : offset + limit],
+            "items": queryset[offset:offset + limit],
             "count": self._items_count(queryset),
         }
 
@@ -54,9 +54,9 @@ class CustomLimitPagination(LimitOffsetPagination):
         offset = self.offset or pagination.offset
         limit: int = min(self.limit or pagination.limit, 100)
         if isinstance(queryset, QuerySet):
-            items = [obj async for obj in queryset[offset : offset + limit]]
+            items = [obj async for obj in queryset[offset:offset + limit]]
         else:
-            items = queryset[offset : offset + limit]
+            items = queryset[offset:offset + limit]
         return {
             "items": items,
             "count": await self._aitems_count(queryset),

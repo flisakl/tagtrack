@@ -14,12 +14,14 @@ class TestArtistRouter(TestHelper):
         files = {'image': self.temp_file()}
 
         response = await self.client.post('', data, FILES=files)
+        response2 = await self.client.post('', {'name': 'Billy Joel'})
+
         expected = {
             'id': 1, 'name': 'Johnny Cash', 'image': '/artists/image.jpg',
             'song_count': None, 'album_count': None
         }
-
         self.assertEqual(response.status_code, 201)
+        self.assertEqual(response2.status_code, 201)
         self.assertJSONEqual(response.content, expected)
 
     async def test_can_not_create_2_artists_with_the_same_name(self):

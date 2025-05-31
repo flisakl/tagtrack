@@ -17,10 +17,10 @@ from tagtrack.models import Album, Song
 
 
 def make_error(loc: list[str], field_name: str, msg: str):
-    l = loc.copy()
-    l.append(field_name)
+    local = loc.copy()
+    local.append(field_name)
     return {
-        "loc": l,
+        "loc": local,
         "msg": _(msg)
     }
 
@@ -48,23 +48,26 @@ def audio_is_valid(audio: TemporaryUploadedFile):
 def raise_on_invalid_audio_file(
     audio: TemporaryUploadedFile | None,
     loc: list[str] = ['form'],
-    field: str = 'file'
-
+    field: str = 'file',
+    raise_on_none: bool = False
 ) -> None | ValidationError:
-    if audio_is_valid(audio):
-        return
-    err = make_error(loc, field, _('File is not an audio file'))
-    raise ValidationError([err])
+    err = ValidationError([
+        make_error(loc, field, _('File is not an audio file'))
+    ])
+    valid = audio_is_valid(audio)
+    if ((raise_on_none and audio is None) or
+       (audio is not None and not valid)):
+        raise err
 
 
 def image_is_valid(image: TemporaryUploadedFile):
-    if "image" not in image.content_type or image is None:
+    if image is None or "image" not in image.content_type:
         return False
 
     try:
         im = Image.open(image.temporary_file_path())
         im.verify()
-    except Exception as e:
+    except Exception:
         return False
     return True
 
@@ -72,14 +75,17 @@ def image_is_valid(image: TemporaryUploadedFile):
 def raise_on_invalid_image(
     image: TemporaryUploadedFile,
     loc: list[str] = ['form'],
-    field: str = 'image'
-
+    field: str = 'image',
+    raise_on_none: bool = False
 ) -> None | ValidationError:
-    """Returns ValidationError when image is invalid"""
-    if image_is_valid(image):
-        return
-    err = make_error(loc, field, _('File is not an image'))
-    raise ValidationError([err])
+    """Raise ValidationError when image is invalid"""
+    err = ValidationError([
+        make_error(loc, field, _('File is not an image'))
+    ])
+    valid = image_is_valid(image)
+    if ((raise_on_none and image is None) or
+       (image is not None and not valid)):
+        raise err
 
 
 async def get_or_set_from_cache(key: str, qs, obj_pk: int = None):
@@ -128,12 +134,12 @@ def make_tempfile_from_apic_frame(frame: APIC | None):
 
 
 async def make_zip_file(songs: list[Song]):
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED, compresslevel=3) as zf:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED, compresslevel=3) as z:
         for s in songs:
-            zf.write(s.file.path, path.basename(s.file.path))
-    buffer.seek(0)
-    return buffer
+            z.write(s.file.path, path.basename(s.file.path))
+    buf.seek(0)
+    return buf
 
 
 class CloseFileResponse(FileResponse):

@@ -20,13 +20,17 @@ class TestRouter(TestHelper):
         artist = await self.create_artist()
         files = {'image': self.temp_file()}
         dt = self.params.copy()
-        dt['artist_id'] = artist.pk
+        dt2 = self.params.copy()
+        dt['artist_id'] = dt2['artist_id'] = artist.pk
+        dt2['name'] = 'Different name'
 
         response = await self.client.post('', dt, FILES=files)
+        response2 = await self.client.post('', dt2)
         json = response.json()
         del dt['artist_id']
 
         self.assertEqual(response.status_code, 201)
+        self.assertEqual(response2.status_code, 201)
         self.assertJSONMatchesDict(json, dt)
 
     async def test_album_can_not_be_created_with_non_existing_artist(self):
